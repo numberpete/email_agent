@@ -3,25 +3,42 @@ import json
 import logging
 import sys
 import streamlit as st
-
+from colorlog import ColoredFormatter
 from src.workflow.workflow import EmailWorkflow
 
 
-# ----------------------------
-# Logging (terminal)
-# ----------------------------
+import logging
+import sys
+from colorlog import ColoredFormatter
+
 root = logging.getLogger()
 root.setLevel(logging.DEBUG)
 
 if not any(isinstance(h, logging.StreamHandler) for h in root.handlers):
     sh = logging.StreamHandler(sys.stderr)
     sh.setLevel(logging.DEBUG)
-    sh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s:%(name)s:%(message)s"))
+
+    sh.setFormatter(
+        ColoredFormatter(
+            "%(asctime)s %(log_color)s%(levelname)-8s%(reset)s "
+            "%(name)s:%(message)s",
+            datefmt="%H:%M:%S",
+            log_colors={
+                "DEBUG": "cyan",
+                "INFO": "green",
+                "WARNING": "yellow",
+                "ERROR": "red",
+                "CRITICAL": "bold_red",
+            },
+        )
+    )
+    
     root.addHandler(sh)
 
 logger = logging.getLogger("EmailAssist")
 logger.setLevel(logging.DEBUG)
 logger.propagate = True
+
 
 # Silence noisy libraries
 logging.getLogger("httpcore").setLevel(logging.WARNING)

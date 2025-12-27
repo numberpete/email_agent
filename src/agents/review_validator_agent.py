@@ -60,19 +60,63 @@ class ReviewValidatorAgent(BaseAgent):
         )
 
     async def _execute(self, state: AgentState) -> Tuple[List[BaseMessage], Dict[str, Any]]:
-        # Use the same invocation contract as other agents (messages + state_json)
+        messages = state.get("messages", [])
+        state_json = self._safe_state_json(state)
+
+        # ----------------------------
+        # DEBUG: inputs
+        # ----------------------------
+        self.logger.debug(
+            f"[{self.name}] ReviewValidator _execute() | "
+            f"messages={len(messages)} | "
+            f"state_keys={list(state.keys())}"
+        )
+
+        if messages:
+            last_msg = messages[-1]
+            last_content = getattr(last_msg, "content", "")
+            self.logger.debug(
+                f"[{self.name}] last_message_preview={last_content[:200]!r}"
+            )
+
+        if state_json:
+            self.logger.debug(
+                f"[{self.name}] state_json_preview={state_json[:500]!r}"
+            )
+
+        # ----------------------------
+        # LLM invocation
+        # ----------------------------
         response = await self.agent.ainvoke(
             {
-                "messages": state.get("messages", []),
-                "state_json": self._safe_state_json(state),
+                "messages": messages,
+                "state_json": state_json,
             }
         )
 
-        # Parse JSON
+        content = getattr(response, "content", "")
+        self.logger.debug(
+            f"[{self.name}] LLM response received | content_length={len(content)}"
+        )
+
+        if content:
+            self.logger.debug(
+                f"[{self.name}] response_preview={content[:400]!r}"
+            )
+
+        # ----------------------------
+        # JSON parsing
+        # ----------------------------
         try:
-            data = json.loads(response.content)
+            data = json.loads(content)
+            self.logger.debug(
+                f"[{self.name}] JSON parse SUCCESS | keys={list(data.keys())}"
+            )
         except Exception as e:
-            # Fallback: treat as FAIL but don't crash the graph
+            self.logger.debug(
+                f"[{self.name}] JSON parse FAILED | error={e}"
+            )
+
             report = {
                 "status": "FAIL",
                 "summary": "Validator returned non-JSON output.",
@@ -89,19 +133,38 @@ class ReviewValidatorAgent(BaseAgent):
                     "recommended_tone": None,
                 },
             }
+
+            self.logger.debug(
+                f"[{self.name}] validation FAIL | reason=json_parse_error"
+            )
+
             return (
                 [AIMessage(content="Validation encountered an internal formatting issue; proceeding with FAIL.")],
                 {"validation_report": report, "is_valid": False},
             )
 
-        # Normalize and enforce minimum shape
+        # ----------------------------
+        # Normalize + evaluate result
+        # ----------------------------
         status = (data.get("status") or "FAIL").upper()
         issues = data.get("issues") or []
+
         if not isinstance(issues, list):
+            self.logger.debug(
+                f"[{self.name}] issues malformed; expected list, got {type(issues).__name__}"
+            )
             issues = []
 
-        # If any high severity issue exists, force FAIL
-        if any(isinstance(i, dict) and (i.get("severity") == "high") for i in issues):
+        # Check for high-severity issues
+        high_severity = [
+            i for i in issues
+            if isinstance(i, dict) and i.get("severity") == "high"
+        ]
+
+        if high_severity:
+            self.logger.debug(
+                f"[{self.name}] high_severity_issues_detected | count={len(high_severity)}"
+            )
             status = "FAIL"
 
         report: Dict[str, Any] = {
@@ -113,4 +176,14 @@ class ReviewValidatorAgent(BaseAgent):
 
         is_valid = report["status"] == "PASS"
 
+        # ----------------------------
+        # DEBUG: outputs
+        # ----------------------------
+        self.logger.debug(
+            f"[{self.name}] validation_result={report['status']} | "
+            f"issues_count={len(report['issues'])} | "
+            f"is_valid={is_valid}"
+        )
+
         return [response], {"validation_report": report, "is_valid": is_valid}
+

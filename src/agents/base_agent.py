@@ -71,10 +71,36 @@ class BaseAgent:
         Override this in agents that need structured outputs (dict/bool/etc).
         BaseAgent supports updating one simple state field (string) via state_key.
         """
+
         messages = state.get("messages", [])
         state_json = self._safe_state_json(state)
 
-        # NOTE: For tool agents, state_json is ignored unless your tool prompt uses it.
+        # ----------------------------
+        # DEBUG: inputs
+        # ----------------------------
+        self.logger.debug(
+            f"[{self.name}] _execute() called | "
+            f"messages={len(messages)} | "
+            f"state_keys={list(state.keys())}"
+        )
+
+        if messages:
+            last_msg = messages[-1]
+            last_content = getattr(last_msg, "content", "")
+            self.logger.debug(
+                f"[{self.name}] last_message_type={type(last_msg).__name__} | "
+                f"last_message_preview={last_content[:200]!r}"
+            )
+
+        # Truncate state_json to avoid log spam
+        if state_json:
+            self.logger.debug(
+                f"[{self.name}] state_json_preview={state_json[:500]!r}"
+            )
+
+        # ----------------------------
+        # LLM invocation
+        # ----------------------------
         response = await self.agent.ainvoke(
             {
                 "messages": messages,
@@ -82,9 +108,32 @@ class BaseAgent:
             }
         )
 
+        # ----------------------------
+        # DEBUG: outputs
+        # ----------------------------
+        content = getattr(response, "content", "")
+        self.logger.debug(
+            f"[{self.name}] LLM response received | "
+            f"content_length={len(content)}"
+        )
+
+        if content:
+            self.logger.debug(
+                f"[{self.name}] response_preview={content[:300]!r}"
+            )
+
+        # ----------------------------
+        # State updates
+        # ----------------------------
         updates: Dict[str, Any] = {}
         if self.state_key:
-            updates[self.state_key] = response.content
+            updates[self.state_key] = content
+            self.logger.debug(
+                f"[{self.name}] state update | "
+                f"{self.state_key} length={len(content)}"
+            )
+        else:
+            self.logger.debug(f"[{self.name}] no state_key; no direct state update")
 
         return [response], updates
 

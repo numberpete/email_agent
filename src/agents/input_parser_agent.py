@@ -79,21 +79,72 @@ class InputParsingAgent(BaseAgent):
         )
 
     async def _execute(self, state: AgentState) -> Tuple[List[BaseMessage], Dict[str, Any]]:
-        response = await self.agent.ainvoke({
-            "messages": state.get("messages", []), 
-            "state_json": self._safe_state_json(state)
-        })
+        messages = state.get("messages", [])
+        state_json = self._safe_state_json(state)
 
-        # Parse JSON safely; if it fails, fall back to clarification
+        # ----------------------------
+        # DEBUG: inputs
+        # ----------------------------
+        self.logger.debug(
+            f"[{self.name}] InputParser _execute() | "
+            f"messages={len(messages)} | "
+            f"state_keys={list(state.keys())}"
+        )
+
+        if messages:
+            last_msg = messages[-1]
+            last_content = getattr(last_msg, "content", "")
+            self.logger.debug(
+                f"[{self.name}] last_message_preview={last_content[:200]!r}"
+            )
+
+        if state_json:
+            self.logger.debug(
+                f"[{self.name}] state_json_preview={state_json[:500]!r}"
+            )
+
+        # ----------------------------
+        # LLM invocation
+        # ----------------------------
+        response = await self.agent.ainvoke(
+            {
+                "messages": messages,
+                "state_json": state_json,
+            }
+        )
+
+        content = getattr(response, "content", "")
+        self.logger.debug(
+            f"[{self.name}] LLM response received | length={len(content)}"
+        )
+
+        if content:
+            self.logger.debug(
+                f"[{self.name}] response_preview={content[:400]!r}"
+            )
+
+        # ----------------------------
+        # JSON parsing
+        # ----------------------------
         try:
-            data = json.loads(response.content)
-        except Exception:
+            data = json.loads(content)
+            self.logger.debug(
+                f"[{self.name}] JSON parse SUCCESS | keys={list(data.keys())}"
+            )
+        except Exception as e:
+            self.logger.debug(
+                f"[{self.name}] JSON parse FAILED | error={e}"
+            )
+
             questions = [
                 "Who is the recipient (name and/or role), and what is your relationship to them?",
                 "What is the main goal of the email (request, update, follow-up, apology, etc.)?",
                 "Any constraints (length, tone, deadline, bullet points, etc.)?",
             ]
-            msg = "I need a bit more information to draft the email:\n" + "\n".join(f"- {q}" for q in questions)
+
+            msg = "I need a bit more information to draft the email:\n" + "\n".join(
+                f"- {q}" for q in questions
+            )
 
             updates: Dict[str, Any] = {
                 "requires_clarification": True,
@@ -106,8 +157,16 @@ class InputParsingAgent(BaseAgent):
                     "questions": questions,
                 },
             }
+
+            self.logger.debug(
+                f"[{self.name}] clarification REQUIRED | reason=json_parse_failure"
+            )
+
             return [AIMessage(content=msg)], updates
 
+        # ----------------------------
+        # Normalize parsed values
+        # ----------------------------
         requires = bool(data.get("requires_clarification", False))
         questions = data.get("clarification_questions") or []
         parsed_input = data.get("parsed_input") or {}
@@ -121,17 +180,25 @@ class InputParsingAgent(BaseAgent):
         if not isinstance(tone_params, dict):
             tone_params = {}
 
+        self.logger.debug(
+            f"[{self.name}] requires_clarification={requires} | "
+            f"parsed_input_keys={list(parsed_input.keys())} | "
+            f"constraints_keys={list(constraints.keys())} | "
+            f"tone_params={tone_params}"
+        )
+
         updates: Dict[str, Any] = {
             "requires_clarification": requires,
             "parsed_input": parsed_input,
             "constraints": constraints,
             "tone_params": tone_params,
-            "validation_report": {"status": "OK"} if not requires else {},  # optional default
+            "validation_report": {"status": "OK"} if not requires else {},
         }
 
-        # If clarification required, emit a user-facing message and store detail in validation_report
+        # ----------------------------
+        # Clarification path
+        # ----------------------------
         if requires:
-            # Ensure we have at least one question
             if not questions:
                 questions = [
                     "Who is the recipient (name and/or role), and what is your relationship to them?",
@@ -147,7 +214,18 @@ class InputParsingAgent(BaseAgent):
                 "questions": questions[:4],
             }
 
+            self.logger.debug(
+                f"[{self.name}] clarification QUESTIONS={questions[:4]}"
+            )
+
             return [AIMessage(content=msg)], updates
 
-        # Success path: keep the model output message for debugging, but you can also omit it later
+        # ----------------------------
+        # Success path
+        # ----------------------------
+        self.logger.debug(
+            f"[{self.name}] parse SUCCESS | proceeding without clarification"
+        )
+
         return [response], updates
+

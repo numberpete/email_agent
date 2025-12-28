@@ -1,43 +1,13 @@
 import asyncio
 import json
 import logging
-import sys
 import streamlit as st
 from colorlog import ColoredFormatter
 from src.workflow.workflow import EmailWorkflow
+from src.utils.logging import setup_logging
 
+logger = setup_logging()
 
-import logging
-import sys
-from colorlog import ColoredFormatter
-
-root = logging.getLogger()
-root.setLevel(logging.DEBUG)
-
-if not any(isinstance(h, logging.StreamHandler) for h in root.handlers):
-    sh = logging.StreamHandler(sys.stderr)
-    sh.setLevel(logging.DEBUG)
-
-    sh.setFormatter(
-        ColoredFormatter(
-            "%(asctime)s %(log_color)s%(levelname)-8s%(reset)s "
-            "%(name)s:%(message)s",
-            datefmt="%H:%M:%S",
-            log_colors={
-                "DEBUG": "cyan",
-                "INFO": "green",
-                "WARNING": "yellow",
-                "ERROR": "red",
-                "CRITICAL": "bold_red",
-            },
-        )
-    )
-    
-    root.addHandler(sh)
-
-logger = logging.getLogger("EmailAssist")
-logger.setLevel(logging.DEBUG)
-logger.propagate = True
 
 
 # Silence noisy libraries
@@ -68,8 +38,8 @@ def run_async(coro):
 # ----------------------------
 # UI Setup
 # ----------------------------
-st.set_page_config(page_title="AI-Powered Email Assistant", page_icon="✉️", layout="wide")
-st.title("✉️ AI-Powered Email Assistant")
+st.set_page_config(page_title="EMaiL Assist: AI-Powered Email Generator", page_icon="✉️", layout="wide")
+st.title("✉️ EMaiL Assist: AI-Powered Email Generator")
 
 # Keep workflow instance stable
 if "workflow" not in st.session_state:

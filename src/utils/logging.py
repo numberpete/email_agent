@@ -1,113 +1,65 @@
-# src/utils/logging.py
-
 import logging
 import sys
-from datetime import datetime
-import uuid
+import contextvars
+from colorlog import ColoredFormatter
+
+# -------------------------------------------------
+# Async-safe correlation ID (ECID)
+# -------------------------------------------------
+ecid_var = contextvars.ContextVar("ecid", default="-")
 
 
-class ColoredFormatter(logging.Formatter):
-    """Custom formatter with colors for different log levels."""
-    
-    COLORS = {
-        'DEBUG': '\033[36m',      # Cyan
-        'INFO': '\033[32m',       # Green
-        'WARNING': '\033[33m',    # Yellow
-        'ERROR': '\033[31m',      # Red
-        'CRITICAL': '\033[35m',   # Magenta
-    }
-    RESET = '\033[0m'
-
-    def format(self, record):
-        # Add color to level name only
-        color = self.COLORS.get(record.levelname, self.RESET)
-        record.levelname = f"{color}{record.levelname}{self.RESET}"
-        
-        return super().format(record)
+class ECIDFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.ecid = ecid_var.get()
+        return True
 
 
-def setup_logger(name: str, level: int = logging.DEBUG) -> logging.Logger:
+def setup_logging(
+    level: int = logging.DEBUG,
+    silence_third_party: bool = True,
+) -> logging.Logger:
     """
-    Creates and configures a logger with colored output.
-    
-    Args:
-        name: Name of the logger (usually __name__)
-        level: Logging level (default: INFO)
-    
-    Returns:
-        Configured logger instance
-    
-    Example:
-        from src.utils.logging import setup_logger
-        
-        logger = setup_logger(__name__)
-        logger.info("This is an info message")
+    Configure colored terminal logging with ECID support.
+    Safe to call multiple times (Streamlit reruns).
     """
-    
-    # Create logger
-    logger = logging.getLogger(name)
+
+    root = logging.getLogger()
+    root.setLevel(level)
+
+    if not any(isinstance(h, logging.StreamHandler) for h in root.handlers):
+        handler = logging.StreamHandler(sys.stderr)
+        handler.setLevel(level)
+
+        handler.addFilter(ECIDFilter())
+
+        handler.setFormatter(
+            ColoredFormatter(
+                "%(asctime)s %(log_color)s%(levelname)-8s%(reset)s "
+                "%(light_black)secid=%(ecid)s%(reset)s %(name)s:%(message)s",
+                datefmt="%H:%M:%S",
+                log_colors={
+                    "DEBUG": "cyan",
+                    "INFO": "green",
+                    "WARNING": "yellow",
+                    "ERROR": "red",
+                    "CRITICAL": "bold_red",
+                },
+            )
+        )
+
+        root.addHandler(handler)
+
+    if silence_third_party:
+        logging.getLogger("httpcore").setLevel(logging.WARNING)
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+        logging.getLogger("openai").setLevel(logging.WARNING)
+        logging.getLogger("asyncio").setLevel(logging.WARNING)
+        logging.getLogger("langchain").setLevel(logging.INFO)
+        logging.getLogger("langgraph").setLevel(logging.INFO)
+
+    logger = logging.getLogger("EmailAssist")
     logger.setLevel(level)
-    
-    # Remove existing handlers to avoid duplicates
-    if logger.handlers:
-        logger.handlers.clear()
-    
-    # Create console handler
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setLevel(level)
-    
-    # Create formatter
-    formatter = ColoredFormatter(
-        fmt='%(levelname)s: %(filename)s:%(lineno)d - %(message)s'
-    )
-    
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-    
-    # Prevent propagation to root logger
-    logger.propagate = False
-    
+    logger.propagate = True
+
     return logger
-
-
-def setup_global_logging(level: int = logging.INFO):
-    """
-    Configure global logging for the entire application.
-    Call this once at application startup.
-    
-    Args:
-        level: Global logging level (default: INFO)
-    """
-    
-    # Configure root logger
-    root_logger = logging.getLogger()
-    root_logger.setLevel(level)
-    
-    # Remove existing handlers
-    if root_logger.handlers:
-        root_logger.handlers.clear()
-    
-    # Create console handler
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setLevel(level)
-    
-    # Create formatter
-    formatter = ColoredFormatter(
-        fmt='%(levelname)s:    %(filename)s:%(lineno)d - %(message)s'
-    )
-    
-    handler.setFormatter(formatter)
-    root_logger.addHandler(handler)
-
-
-# Example usage when run directly
-if __name__ == "__main__":
-    # Test the logger
-    logger = setup_logger(__name__)
-    
-    logger.debug("This is a debug message")
-    logger.info("This is an info message")
-    logger.warning("This is a warning message")
-    logger.error("This is an error message")
-    logger.critical("This is a critical message")
-    

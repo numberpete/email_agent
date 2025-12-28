@@ -14,7 +14,8 @@ from src.agents.draft_writer_agent import DraftWriterAgent
 from src.agents.personalization_agent import PersonalizationAgent
 from src.agents.review_validator_agent import ReviewValidatorAgent
 from src.agents.routing_memory_agent import RoutingMemoryAgent
-
+from src.utils.logging import ecid_var
+import uuid
 
 class EmailWorkflow:
     def __init__(self, logger: logging.Logger):
@@ -159,6 +160,8 @@ class EmailWorkflow:
         intent: str | None = None,
         metadata: dict | None = None
     ) -> Dict[str, Any]:
+        #initialize ecid for tracing
+        ecid_var.set(uuid.uuid7().hex[:12])
         # Normalize optional inputs
         tone_params = {"tone": tone} if tone else {}
         metadata_dict = metadata if isinstance(metadata, dict) else {}

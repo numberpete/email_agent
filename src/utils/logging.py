@@ -37,7 +37,7 @@ def setup_logging(
             ColoredFormatter(
                 "%(asctime)s %(log_color)s%(levelname)-8s%(reset)s "
                 "%(light_black)secid=%(ecid)s%(reset)s %(name)s:%(message)s",
-                datefmt="%H:%M:%S",
+                datefmt="%Y-%m-%d %H:%M:%S",
                 log_colors={
                     "DEBUG": "cyan",
                     "INFO": "green",

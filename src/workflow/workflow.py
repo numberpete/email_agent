@@ -1,5 +1,5 @@
 import logging, json
-from typing import Dict, Any, Union
+from typing import Dict, Any
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -15,27 +15,30 @@ from src.agents.personalization_agent import PersonalizationAgent
 from src.agents.review_validator_agent import ReviewValidatorAgent
 from src.agents.routing_memory_agent import RoutingMemoryAgent
 from src.utils.logging import ecid_var
-import uuid
+import uuid_utils as uuid
 
 class EmailWorkflow:
     def __init__(self, logger: logging.Logger):
         # ------------------------------------------------------------------
         # 1. Model setup (explicit and intentional)
         # ------------------------------------------------------------------
-        mini_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
-        full_llm = ChatOpenAI(model="gpt-4o", temperature=0.7)
+        deterministic_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
+        creative_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
+        deterministic_plus_llm = ChatOpenAI(model="gpt-4o", temperature=0.1)
+        creative_plus_llm = ChatOpenAI(model="gpt-4o", temperature=0.6)
 
         # ------------------------------------------------------------------
         # 2. Agent instantiation
         # ------------------------------------------------------------------
-        self.input_parser = InputParsingAgent(mini_llm, logger)
-        self.intent_detector = IntentDetectionAgent(mini_llm, logger)
-        self.tone_stylist = ToneStylistAgent(mini_llm, logger)
+        self.input_parser = InputParsingAgent(deterministic_llm, logger)
+        self.intent_detector = IntentDetectionAgent(deterministic_llm, logger)
+        self.tone_stylist = ToneStylistAgent(deterministic_llm, logger)
 
-        self.draft_writer = DraftWriterAgent(mini_llm, logger)
-        self.personalizer = PersonalizationAgent(mini_llm, logger)
-        self.validator = ReviewValidatorAgent(mini_llm, logger)
-        self.memory_agent = RoutingMemoryAgent(mini_llm, logger)
+        self.draft_writer = DraftWriterAgent(creative_llm, logger)
+        self.personalizer = PersonalizationAgent(deterministic_llm, logger)
+        self.validator = ReviewValidatorAgent(deterministic_llm, logger)
+        self.memory_agent = RoutingMemoryAgent(deterministic_llm, logger)
+        self.logger = logger
 
         # ------------------------------------------------------------------
         # 3. Build the LangGraph
@@ -193,8 +196,10 @@ class EmailWorkflow:
             "requires_clarification": False,
             "parsed_input": {},
             "constraints": initial_constraints,   # <-- now includes optional metadata/overrides
-            "intent": intent or "",               # <-- UI override if provided
+            "intent": "",               
             "intent_confidence": 0.0,
+            "intent_source": "",             
+            "user_intent_override": "",      
             "tone_params": tone_params,           # <-- UI override if provided
             "draft": "",
             "personalized_draft": "",
@@ -205,13 +210,33 @@ class EmailWorkflow:
             "retry_count": 0,
         }
 
+        if intent and intent.lower() not in {"auto", "(auto)"}:
+            initial_state["user_intent_override"] = intent.strip()
+
+        self.logger.debug(
+            "run_query initial_state keys=%s intent_source=%r user_intent_override=%r id=%s",
+            sorted(initial_state.keys()),
+            initial_state.get("intent_source"),
+            initial_state.get("user_intent_override"),
+            id(self),
+        )
+
         final_state = await self.app.ainvoke(
             initial_state,
             config={"recursion_limit": 50}
+        )
+
+        self.logger.debug(
+            f"Workflow end: intent={final_state.get('intent')!r} "
+            f"intent_source={final_state.get('intent_source')!r} "
+            f"confidence={final_state.get('intent_confidence')!r}"
         )
 
         return {
             "draft": final_state.get("personalized_draft") or final_state.get("draft"),
             "validation_report": final_state.get("validation_report"),
             "messages": final_state.get("messages", []),
+            "intent": final_state.get("intent"),
+            "intent_confidence": final_state.get("intent_confidence"),
+            "intent_source": final_state.get("intent_source"),
         }

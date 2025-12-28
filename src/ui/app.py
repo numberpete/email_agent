@@ -67,7 +67,7 @@ tone = st.sidebar.selectbox(
 
 intent = st.sidebar.selectbox(
     "Intent",
-    options=["(auto)", "outreach", "follow_up", "apology", "info", "internal_update", "request", "other"],
+    options=["(auto)", "outreach", "follow_up", "apology", "info", "request", "scheduling", "thank_you", "other"],
     index=0,
 )
 
@@ -218,19 +218,42 @@ with left:
         resp = st.session_state.get("last_response") or {}
         vr = st.session_state.get("validation_report")
 
-        if isinstance(vr, dict):
-            status = (vr.get("status") or "").upper()
-            if status:
-                st.markdown(f"**Validation status:** {status}")
-            st.json(vr)
-        elif vr:
-            st.code(str(vr))
+        if not resp:
+            st.caption("No debug data yet. Generate an email to populate the trace.")
+        else:
+            # Minimal quick sanity: show what keys you actually have
+            st.caption(f"Response keys: {', '.join(sorted(resp.keys()))}")
 
-        msgs = resp.get("messages", [])
-        if msgs:
-            st.markdown("**Last message:**")
-            last_msg = msgs[-1]
-            st.code(getattr(last_msg, "content", str(last_msg)))
+            # ----------------------------
+            # Intent debug (minimal)
+            # ----------------------------
+            intent = resp.get("intent")
+            intent_conf = resp.get("intent_confidence")
+            intent_src = resp.get("intent_source")
+
+            if intent:
+                st.markdown("### Intent Detection")
+                cols = st.columns(3)
+                cols[0].markdown(f"**Intent:** `{intent}`")
+                if intent_conf is not None:
+                    try:
+                        cols[1].markdown(f"**Confidence:** `{float(intent_conf):.2f}`")
+                    except Exception:
+                        cols[1].markdown(f"**Confidence:** `{intent_conf}`")
+                if intent_src:
+                    cols[2].markdown(f"**Source:** `{intent_src}`")
+            else:
+                st.caption("Intent not present in response. Add it to workflow return payload.")
+
+            st.divider()
+
+            # Optional: show validation report too
+            if isinstance(vr, dict):
+                st.markdown("### Validation Report")
+                st.json(vr)
+            elif vr is not None:
+                st.markdown("### Validation Report")
+                st.code(str(vr))
 
 with right:
     st.subheader("Real-time Preview")

@@ -17,6 +17,8 @@ class AgentState(TypedDict, total=False):
     intent: str                         # outreach, follow-up, apology, info
     intent_confidence: float
     tone_params: Dict[str, Any]         # tokenized tone spec (formality, warmth…)
+    user_intent_override: str           # if UI forces an intent
+    intent_source: str                  # "ui" | "model" | "default"
 
     # ===== Drafting =====
     draft: str                          # generic draft

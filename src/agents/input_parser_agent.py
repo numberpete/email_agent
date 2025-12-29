@@ -19,7 +19,6 @@ Responsibilities:
    - recipient: who the email is to (name/role/relationship if provided; otherwise null)
    - context: background info that should be included (if provided; otherwise null)
    - constraints: explicit constraints such as length, audience, format, deadline, must_include, must_avoid
-   - tone_params: explicit tone instructions (formal, friendly, assertive, apologetic, etc.)
 
 Failure behavior:
 - If input is unusable or too ambiguous, set requires_clarification=true and provide 1-4 clarification questions.
@@ -45,9 +44,6 @@ Return ONLY valid JSON matching this schema:
     "deadline": string|null,
     "must_include": [string],
     "must_avoid": [string]
-  }},
-  "tone_params": {{
-    "tone_label": string|null
   }}
 }}
 
@@ -65,7 +61,6 @@ class InputParsingAgent(BaseAgent):
     - requires_clarification (bool)
     - parsed_input (dict)
     - constraints (dict)
-    - tone_params (dict)
     Optionally sets validation_report (dict) when clarification is required.
     """
 
@@ -150,7 +145,6 @@ class InputParsingAgent(BaseAgent):
                 "requires_clarification": True,
                 "parsed_input": {},
                 "constraints": {},
-                "tone_params": {},
                 "validation_report": {
                     "status": "NEEDS_CLARIFICATION",
                     "reason": "Input parser could not produce structured parse output.",
@@ -171,27 +165,22 @@ class InputParsingAgent(BaseAgent):
         questions = data.get("clarification_questions") or []
         parsed_input = data.get("parsed_input") or {}
         constraints = data.get("constraints") or {}
-        tone_params = data.get("tone_params") or {}
 
         if not isinstance(parsed_input, dict):
             parsed_input = {}
         if not isinstance(constraints, dict):
             constraints = {}
-        if not isinstance(tone_params, dict):
-            tone_params = {}
 
         self.logger.debug(
             f"[{self.name}] requires_clarification={requires} | "
             f"parsed_input_keys={list(parsed_input.keys())} | "
-            f"constraints_keys={list(constraints.keys())} | "
-            f"tone_params={tone_params}"
+            f"constraints_keys={list(constraints.keys())} "
         )
 
         updates: Dict[str, Any] = {
             "requires_clarification": requires,
             "parsed_input": parsed_input,
             "constraints": constraints,
-            "tone_params": tone_params,
             "validation_report": {"status": "OK"} if not requires else {},
         }
 

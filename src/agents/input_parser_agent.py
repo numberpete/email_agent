@@ -47,7 +47,7 @@ Return ONLY valid JSON matching this schema:
     "must_avoid": [string]
   }},
   "tone_params": {{
-    "tone": string|null
+    "tone_label": string|null
   }}
 }}
 

@@ -163,10 +163,22 @@ class EmailWorkflow:
         intent: str | None = None,
         metadata: dict | None = None
     ) -> Dict[str, Any]:
+    
+        self.logger.debug(
+            "run_query inputs: user_input_len=%d tone=%r intent=%r metadata_keys=%s",
+            len(user_input or ""),
+            tone,
+            intent,
+            sorted(metadata.keys()) if isinstance(metadata, dict) else None,
+        )
+
         #initialize ecid for tracing
         ecid_var.set(uuid.uuid7().hex[:12])
         # Normalize optional inputs
-        tone_params = {"tone": tone} if tone else {}
+        tone_params = {}
+        if tone and tone.strip() and tone.strip().lower() not in {"(auto)", "auto", "none"}:
+            tone_params = {"tone_label": tone.strip()}
+
         metadata_dict = metadata if isinstance(metadata, dict) else {}
 
         initial_constraints: Dict[str, Any] = {}
@@ -198,7 +210,8 @@ class EmailWorkflow:
             "constraints": initial_constraints,   # <-- now includes optional metadata/overrides
             "intent": "",               
             "intent_confidence": 0.0,
-            "intent_source": "",             
+            "intent_source": "",
+            "tone_source": "",             
             "user_intent_override": "",      
             "tone_params": tone_params,           # <-- UI override if provided
             "draft": "",
@@ -226,11 +239,18 @@ class EmailWorkflow:
             config={"recursion_limit": 50}
         )
 
-        self.logger.debug(
-            f"Workflow end: intent={final_state.get('intent')!r} "
-            f"intent_source={final_state.get('intent_source')!r} "
-            f"confidence={final_state.get('intent_confidence')!r}"
-        )
+        debug_snapshot = {
+            "intent": final_state.get("intent"),
+            "intent_confidence": final_state.get("intent_confidence"),
+            "intent_source": final_state.get("intent_source"),
+            "tone_source": final_state.get("tone_source"),
+            "tone_label": (final_state.get("tone_params") or {}).get("tone_label"),
+            "retry_count": final_state.get("retry_count"),
+            "is_valid": final_state.get("is_valid"),
+            "validation_status": (final_state.get("validation_report") or {}).get("status"),
+        }
+
+        self.logger.debug("Workflow end snapshot=%s", debug_snapshot)
 
         return {
             "draft": final_state.get("personalized_draft") or final_state.get("draft"),
@@ -239,4 +259,6 @@ class EmailWorkflow:
             "intent": final_state.get("intent"),
             "intent_confidence": final_state.get("intent_confidence"),
             "intent_source": final_state.get("intent_source"),
+            "tone_params": final_state.get("tone_params"),
+            "tone_source": final_state.get("tone_source"),
         }

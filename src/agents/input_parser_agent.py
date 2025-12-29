@@ -43,7 +43,9 @@ Return ONLY valid JSON matching this schema:
     "audience": string|null,
     "deadline": string|null,
     "must_include": [string],
-    "must_avoid": [string]
+    "must_avoid": [string],
+    "use_bullets": boolean|null,
+    "bullet_count": integer|null
   }}
 }}
 
@@ -52,6 +54,8 @@ Rules:
 - Do not invent recipient details; use null if unknown.
 - Keep strings concise.
 - If requires_clarification is true, parsed_input.primary_request may be empty.
+- If user requests bullets/bullet points/numbered list → constraints.use_bullets = true
+- Optionally include constraints.bullet_count if specified
 """.strip()
 
 

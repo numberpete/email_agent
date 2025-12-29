@@ -10,6 +10,8 @@ from src.agents.state import AgentState
 from src.agents.input_parser_agent import InputParsingAgent
 from src.agents.intent_detection_agent import IntentDetectionAgent
 from src.agents.tone_stylist_agent import ToneStylistAgent
+from src.templates.sqlite_store import SQLiteTemplateStore
+from src.templates.engine import EmailTemplateEngine
 from src.agents.draft_writer_agent import DraftWriterAgent
 from src.agents.personalization_agent import PersonalizationAgent
 from src.agents.review_validator_agent import ReviewValidatorAgent
@@ -34,7 +36,12 @@ class EmailWorkflow:
         self.intent_detector = IntentDetectionAgent(deterministic_llm, logger)
         self.tone_stylist = ToneStylistAgent(deterministic_llm, logger)
 
-        self.draft_writer = DraftWriterAgent(creative_llm, logger)
+        db_path = "data/email_assist.db"  # or env var
+        template_store = SQLiteTemplateStore(db_path)
+        template_engine = EmailTemplateEngine(template_store)
+
+        self.draft_writer = DraftWriterAgent(creative_llm, logger, template_engine)
+
         self.personalizer = PersonalizationAgent(deterministic_llm, logger)
         self.validator = ReviewValidatorAgent(deterministic_llm, logger)
         self.memory_agent = RoutingMemoryAgent(deterministic_llm, logger)
@@ -183,7 +190,7 @@ class EmailWorkflow:
 
         initial_constraints: Dict[str, Any] = {}
         if metadata_dict:
-            initial_constraints["metadata"] = metadata_dict
+            initial_constraints.update(metadata_dict)
         if intent:
             # Optional: keep the UI override visible in state for debugging
             initial_constraints["intent_override"] = intent
@@ -245,6 +252,8 @@ class EmailWorkflow:
             "intent_source": final_state.get("intent_source"),
             "tone_source": final_state.get("tone_source"),
             "tone_label": (final_state.get("tone_params") or {}).get("tone_label"),
+            "template_id": final_state.get("template_id"),
+            "template_plan": final_state.get("template_plan"),
             "retry_count": final_state.get("retry_count"),
             "is_valid": final_state.get("is_valid"),
             "validation_status": (final_state.get("validation_report") or {}).get("status"),
@@ -261,4 +270,6 @@ class EmailWorkflow:
             "intent_source": final_state.get("intent_source"),
             "tone_params": final_state.get("tone_params"),
             "tone_source": final_state.get("tone_source"),
+            "template_id": final_state.get("template_id"),
+            "template_plan": final_state.get("template_plan"),
         }

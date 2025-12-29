@@ -22,6 +22,8 @@ class AgentState(TypedDict, total=False):
     tone_source: str                    # "ui" | "model" | "default"
 
     # ===== Drafting =====
+    template_id: str
+    template_plan: Dict[str, Any]   # structure + budgets + placeholders
     draft: str                          # generic draft
     personalized_draft: str             # after personalization
 

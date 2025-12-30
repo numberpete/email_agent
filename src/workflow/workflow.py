@@ -1,7 +1,7 @@
 import logging, json
 from typing import Dict, Any
 
-from langchain_openai import ChatOpenAI
+from langchain_litellm import ChatLiteLLMRouter
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import StateGraph, END
 
@@ -18,6 +18,7 @@ from src.agents.personalization_agent import PersonalizationAgent
 from src.agents.review_validator_agent import ReviewValidatorAgent
 from src.agents.routing_memory_agent import RoutingMemoryAgent
 from src.utils.logging import ecid_var
+from src.workflow.router import LLM_ROUTER
 import uuid_utils as uuid
 
 class EmailWorkflow:
@@ -25,10 +26,8 @@ class EmailWorkflow:
         # ------------------------------------------------------------------
         # 1. Model setup (explicit and intentional)
         # ------------------------------------------------------------------
-        deterministic_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
-        creative_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
-        deterministic_plus_llm = ChatOpenAI(model="gpt-4o", temperature=0.1)
-        creative_plus_llm = ChatOpenAI(model="gpt-4o", temperature=0.6)
+        deterministic_llm = ChatLiteLLMRouter(router=LLM_ROUTER, model_name="deterministic")
+        creative_llm = ChatLiteLLMRouter(router=LLM_ROUTER, model_name="creative")
 
         # ------------------------------------------------------------------
         # 2. Agent instantiation

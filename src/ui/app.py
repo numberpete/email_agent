@@ -2,7 +2,6 @@ import asyncio
 import json
 import logging
 import streamlit as st
-from colorlog import ColoredFormatter
 from src.workflow.workflow import EmailWorkflow
 from src.utils.logging import setup_logging
 
@@ -16,6 +15,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("openai").setLevel(logging.WARNING)
 logging.getLogger("langchain").setLevel(logging.INFO)
 logging.getLogger("langgraph").setLevel(logging.INFO)
+logging.getLogger("LiteLLM").setLevel(logging.INFO)
 
 # Avoid repeating this on every Streamlit rerun
 if "logger_announced" not in st.session_state:

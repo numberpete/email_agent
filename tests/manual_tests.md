@@ -219,3 +219,214 @@ Debug:
 retry_count ends at 1 or 2 (depending on your config)
 
 final response still returns a draft or safe refusal
+
+*Personalization Tests*
+
+Test 1 — Baseline personalization: signature substitution
+
+UI
+
+Tone: (auto)
+
+Intent: follow_up (or auto)
+
+Metadata:
+
+{"user_id":"default"}
+
+
+Prompt
+
+Follow up with the recruiter about my application. Keep it short.
+
+Expected
+
+Editable Draft / Preview includes a sign-off consistent with your template/draft (e.g., “Thanks,”)
+
+The signature line should reflect profile: Peter Hanus (or your signature format if you implement one)
+
+Debug panel:
+
+template_id set (from DraftWriter)
+
+user_context.name == "Peter Hanus"
+
+personalized_draft is non-empty and differs only minimally from draft
+
+Test 2 — Switch user_id changes personalization
+
+UI
+
+Tone: (auto)
+
+Intent: follow_up (or auto)
+
+Metadata:
+
+{"user_id":"alex"}
+
+
+Prompt
+
+Follow up with the recruiter about my application. Keep it short.
+
+Expected
+
+Signature becomes Alex Kim
+
+Debug panel:
+
+user_context.name == "Alex Kim"
+
+This proves personalization is DB-driven, not hardcoded.
+
+Test 3 — Unknown user_id -> no personalization, no crash
+
+UI
+
+Tone: (auto)
+
+Intent: request (or auto)
+
+Metadata:
+
+{"user_id":"does_not_exist"}
+
+
+Prompt
+
+Ask IT to restore my VPN access. I need it for a call in 2 hours.
+
+Expected
+
+Email still generated
+
+Signature stays default placeholder or generic (e.g., [Your Name]) depending on DraftWriter output
+
+Debug:
+
+user_context empty {} (or absent)
+
+personalized_draft equals draft (or close)
+
+No exceptions, no clarification loop.
+
+Test 4 — Greeting personalization from parsed_input (if implemented)
+
+This tests recipient name flow. Only run if your InputParser / UI supplies recipient.
+
+UI
+
+Metadata:
+
+{"user_id":"default"}
+
+
+Prompt
+
+Write an email to Jordan asking for a 15-minute meeting next week to discuss the project.
+
+Expected
+
+If parsed_input contains recipient name, greeting becomes “Hi Jordan,”
+
+If you don’t extract recipient yet, mark this as “expected not implemented” and skip.
+
+Debug:
+
+parsed_input shows recipient or not
+
+user_context.name == "Peter Hanus"
+
+Test 5 — Personalizer fail-soft behavior (non-JSON / failure)
+
+This validates the resilience path (no graph crash, preserves original draft).
+
+UI
+
+Metadata:
+
+{"user_id":"default"}
+
+
+Setup
+
+Temporarily break the PersonalizationAgent prompt or force it to return non-JSON (quick hack: add an instruction like “respond in markdown” to its system prompt, then revert).
+
+Prompt
+
+Write a short thank-you email to a colleague for helping me debug an issue.
+
+Expected
+
+No crash
+
+Output draft still appears (should fall back to unpersonalized draft)
+
+Debug:
+
+personalized_draft equals original draft (or exists and matches)
+
+user_context still loaded (shows profile keys)
+
+Test 6 — End-to-end: validator retry bounded + personalization still applied
+
+UI
+
+Tone: assertive
+
+Intent: request
+
+Metadata:
+
+{"user_id":"default"}
+
+
+Prompt
+
+Ask the vendor to immediately fix their broken integration. Make it aggressive.
+
+Expected
+
+Draft should be professional (not aggressive/threatening)
+
+If validator FAILs and retries DraftWriter, the final output still:
+
+ends with Peter Hanus
+
+does not recursion-loop
+
+Debug:
+
+retry_count increments at most to your bound
+
+user_context present
+
+validation_report.status PASS or FAIL, but graph completes
+
+Test 7 — Metadata propagation sanity (constraints + personalization)
+
+UI
+
+Metadata:
+
+{"user_id":"default","use_bullets":true}
+
+
+Prompt
+
+Send a project status update with three bullet points: what shipped, what’s next, risks.
+
+Expected
+
+Output includes bullets
+
+Debug:
+
+constraints.use_bullets == true (if you surface constraints)
+
+template_plan.format.use_bullets == true (if your engine uses constraints)
+
+Signature uses Peter Hanus
+
+This test confirms metadata merges into constraints and personalization works.

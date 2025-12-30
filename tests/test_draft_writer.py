@@ -1,9 +1,11 @@
 import pytest
 
 from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.runnables import RunnableLambda
 
 from src.agents.draft_writer_agent import DraftWriterAgent
 from src.templates.engine import EmailTemplateEngine
+from tests.utils.mock_llm import MOCK_LLM
 
 
 class DummyLogger:
@@ -46,7 +48,7 @@ async def test_draft_writer_sets_draft_template_id_and_plan():
     }
     engine = EmailTemplateEngine(DummyStore(tpl))
 
-    writer = DraftWriterAgent(llm=None, logger=DummyLogger(), template_engine=engine)
+    writer = DraftWriterAgent(llm=MOCK_LLM, logger=DummyLogger(), template_engine=engine)
     fake = FakeChain("Subject: Following up\n\nHi,\n\nJust checking in.\n\nThanks,\nPeter")
     writer.agent = fake  # override the LC runnable
 
@@ -86,7 +88,7 @@ async def test_draft_writer_sets_draft_template_id_and_plan():
 async def test_draft_writer_empty_template_id_when_no_template_found():
     engine = EmailTemplateEngine(DummyStore(None))
 
-    writer = DraftWriterAgent(llm=None, logger=DummyLogger(), template_engine=engine)
+    writer = DraftWriterAgent(llm=MOCK_LLM, logger=DummyLogger(), template_engine=engine)
     writer.agent = FakeChain("Subject: Message\n\nHello,\n\nHere is the email.\n\nThanks,\n[Your Name]")
 
     state = {
@@ -117,7 +119,7 @@ async def test_draft_writer_provides_non_empty_state_json_to_model():
     }
     engine = EmailTemplateEngine(DummyStore(tpl))
 
-    writer = DraftWriterAgent(llm=None, logger=DummyLogger(), template_engine=engine)
+    writer = DraftWriterAgent(llm=MOCK_LLM, logger=DummyLogger(), template_engine=engine)
     fake = FakeChain("Subject: Request\n\nHello,\n\nCould you approve this?\n\nThank you,\n[Your Name]")
     writer.agent = fake
 

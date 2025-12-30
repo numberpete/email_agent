@@ -28,14 +28,6 @@ class DraftWriterAgent(BaseAgent):
     def __init__(self, llm, logger, template_engine):
         self.template_engine = template_engine
 
-        # Allow llm=None for unit tests
-        if llm is None:
-            self.name = "DraftWriter"
-            self.logger = logger
-            self.agent = None
-            self.state_key = None
-            return
-
         super().__init__(
             name="DraftWriter",
             llm=llm,

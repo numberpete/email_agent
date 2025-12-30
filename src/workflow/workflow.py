@@ -1,7 +1,7 @@
 import logging, json
 from typing import Dict, Any
 
-from langchain_openai import ChatOpenAI
+from langchain_litellm import ChatLiteLLMRouter
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import StateGraph, END
 
@@ -13,10 +13,12 @@ from src.agents.tone_stylist_agent import ToneStylistAgent
 from src.templates.sqlite_store import SQLiteTemplateStore
 from src.templates.engine import EmailTemplateEngine
 from src.agents.draft_writer_agent import DraftWriterAgent
+from src.profiles.sqlite_profile_store import SQLiteProfileStore
 from src.agents.personalization_agent import PersonalizationAgent
 from src.agents.review_validator_agent import ReviewValidatorAgent
 from src.agents.routing_memory_agent import RoutingMemoryAgent
 from src.utils.logging import ecid_var
+from src.workflow.router import LLM_ROUTER
 import uuid_utils as uuid
 
 class EmailWorkflow:
@@ -24,10 +26,8 @@ class EmailWorkflow:
         # ------------------------------------------------------------------
         # 1. Model setup (explicit and intentional)
         # ------------------------------------------------------------------
-        deterministic_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
-        creative_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
-        deterministic_plus_llm = ChatOpenAI(model="gpt-4o", temperature=0.1)
-        creative_plus_llm = ChatOpenAI(model="gpt-4o", temperature=0.6)
+        deterministic_llm = ChatLiteLLMRouter(router=LLM_ROUTER, model_name="deterministic")
+        creative_llm = ChatLiteLLMRouter(router=LLM_ROUTER, model_name="creative")
 
         # ------------------------------------------------------------------
         # 2. Agent instantiation
@@ -39,10 +39,11 @@ class EmailWorkflow:
         db_path = "data/email_assist.db"  # or env var
         template_store = SQLiteTemplateStore(db_path)
         template_engine = EmailTemplateEngine(template_store)
+        profile_store = SQLiteProfileStore(db_path)
 
         self.draft_writer = DraftWriterAgent(creative_llm, logger, template_engine)
 
-        self.personalizer = PersonalizationAgent(deterministic_llm, logger)
+        self.personalizer = PersonalizationAgent(deterministic_llm, logger, profile_store)
         self.validator = ReviewValidatorAgent(deterministic_llm, logger)
         self.memory_agent = RoutingMemoryAgent(deterministic_llm, logger)
         self.logger = logger
@@ -178,7 +179,6 @@ class EmailWorkflow:
             intent,
             sorted(metadata.keys()) if isinstance(metadata, dict) else None,
         )
-
         #initialize ecid for tracing
         ecid_var.set(uuid.uuid7().hex[:12])
         # Normalize optional inputs
@@ -188,18 +188,18 @@ class EmailWorkflow:
 
         metadata_dict = metadata if isinstance(metadata, dict) else {}
 
+        user_id = "default" #for personalization
+        messages = []
         initial_constraints: Dict[str, Any] = {}
         if metadata_dict:
             initial_constraints.update(metadata_dict)
+            user_id = (metadata.get("user_id") or user_id)
+            messages.append(SystemMessage(content=f"METADATA (authoritative): {json.dumps(metadata)}"))
         if intent:
             # Optional: keep the UI override visible in state for debugging
             initial_constraints["intent_override"] = intent
         if tone:
             initial_constraints["tone_override"] = tone
-
-        messages = []
-        if metadata and isinstance(metadata, dict) and metadata:
-            messages.append(SystemMessage(content=f"METADATA (authoritative): {json.dumps(metadata)}"))
 
         # Optional: make UI overrides explicit too
         if tone:
@@ -223,6 +223,7 @@ class EmailWorkflow:
             "tone_params": tone_params,           # <-- UI override if provided
             "draft": "",
             "personalized_draft": "",
+            "user_id": user_id,
             "user_context": {},
             "memory_updates": {},
             "is_valid": True,
@@ -254,6 +255,9 @@ class EmailWorkflow:
             "tone_label": (final_state.get("tone_params") or {}).get("tone_label"),
             "template_id": final_state.get("template_id"),
             "template_plan": final_state.get("template_plan"),
+            "user_id": final_state.get("user_id"),
+            "draft_len": len(final_state.get("draft") or ""),
+            "personalized_draft_len": len(final_state.get("personalized_draft") or ""),
             "retry_count": final_state.get("retry_count"),
             "is_valid": final_state.get("is_valid"),
             "validation_status": (final_state.get("validation_report") or {}).get("status"),
@@ -272,4 +276,5 @@ class EmailWorkflow:
             "tone_source": final_state.get("tone_source"),
             "template_id": final_state.get("template_id"),
             "template_plan": final_state.get("template_plan"),
+            "user_id": final_state.get("user_id"),
         }

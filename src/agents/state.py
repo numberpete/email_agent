@@ -28,6 +28,7 @@ class AgentState(TypedDict, total=False):
     personalized_draft: str             # after personalization
 
     # ===== User Context & Memory =====
+    user_id: str
     user_context: Dict[str, Any]        # profile data, preferences
     memory_updates: Dict[str, Any]      # safe-to-persist deltas only
 

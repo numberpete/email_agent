@@ -16,6 +16,7 @@ logging.getLogger("openai").setLevel(logging.WARNING)
 logging.getLogger("langchain").setLevel(logging.INFO)
 logging.getLogger("langgraph").setLevel(logging.INFO)
 logging.getLogger("LiteLLM").setLevel(logging.INFO)
+logging.getLogger("LiteLLM Router").setLevel(logging.INFO)
 
 # Avoid repeating this on every Streamlit rerun
 if "logger_announced" not in st.session_state:

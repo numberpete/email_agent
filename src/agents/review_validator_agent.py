@@ -1,25 +1,13 @@
 import json
 from typing import Any, Dict, List, Tuple
 
-from langchain_core.messages import AIMessage, BaseMessage
-
+from langchain_core.messages import BaseMessage, AIMessage, HumanMessage 
 from src.agents.base_agent import BaseAgent
 from src.agents.state import AgentState
 
 
 SYSTEM_PROMPT = """
-You are the Review & Validator Agent for an AI-powered email assistant.
-
-Review the drafted email for:
-- grammar and spelling
-- clarity and concision
-- tone alignment with the requested tone (if any)
-- overall coherence and professionalism
-
-Inputs:
-- The email draft will be present in state (e.g., personalized_draft or draft).
-- Tone hints may be in state_json (tone_params) and/or system messages.
-
+...
 Output:
 Return ONLY valid JSON matching this schema:
 
@@ -37,12 +25,15 @@ Return ONLY valid JSON matching this schema:
   "suggested_edits": {{
     "apply_minor_fixes": boolean,
     "recommended_tone": string|null
-  }}
+  }},
+  "revision_instructions": string
 }}
 
 Rules:
 - Keep "summary" short (1-2 sentences).
 - If there are any high-severity issues, status MUST be "FAIL".
+- If status is FAIL, revision_instructions MUST be non-empty and actionable (1-3 sentences).
+- If status is PASS, revision_instructions SHOULD be empty.
 - Do not rewrite the full email; only review and suggest fixes.
 """.strip()
 
@@ -61,8 +52,13 @@ class ReviewValidatorAgent(BaseAgent):
 
     async def _execute(self, state: AgentState) -> Tuple[List[BaseMessage], Dict[str, Any]]:
         messages = state.get("messages", [])
-        state_json = self._safe_state_json(state)
 
+        payload = {
+            "draft": state.get("personalized_draft") or state.get("draft") or "",
+            "tone_params": state.get("tone_params") or {},
+            "intent": state.get("intent") or "",
+            "constraints": state.get("constraints") or {},
+        }
         # ----------------------------
         # DEBUG: inputs
         # ----------------------------
@@ -79,18 +75,26 @@ class ReviewValidatorAgent(BaseAgent):
                 f"[{self.name}] last_message_preview={last_content[:200]!r}"
             )
 
-        if state_json:
+
+        if payload:
+            payload_str = str(payload) if not isinstance(payload, str) else payload
             self.logger.debug(
-                f"[{self.name}] state_json_preview={state_json[:500]!r}"
+                f"[{self.name}] state_json_preview={payload_str!r}"
             )
 
         # ----------------------------
         # LLM invocation
         # ----------------------------
+        draft_text = payload["draft"]
+        validator_messages = [
+            AIMessage(content="Validate ONLY the email draft in the next message. Ignore prior conversation text."),
+            HumanMessage(content=draft_text),
+        ]
+
         response = await self.agent.ainvoke(
             {
-                "messages": messages,
-                "state_json": state_json,
+                "messages": validator_messages,
+                "state_json": payload,
             }
         )
 
@@ -101,7 +105,7 @@ class ReviewValidatorAgent(BaseAgent):
 
         if content:
             self.logger.debug(
-                f"[{self.name}] response_preview={content[:400]!r}"
+                f"[{self.name}] response_preview={content!r}"
             )
 
         # ----------------------------
@@ -132,6 +136,7 @@ class ReviewValidatorAgent(BaseAgent):
                     "apply_minor_fixes": False,
                     "recommended_tone": None,
                 },
+                "revision_instructions": "",
             }
 
             self.logger.debug(
@@ -158,7 +163,7 @@ class ReviewValidatorAgent(BaseAgent):
         # Check for high-severity issues
         high_severity = [
             i for i in issues
-            if isinstance(i, dict) and i.get("severity") == "high"
+            if isinstance(i, dict) and (str(i.get("severity") or "").lower() == "high")
         ]
 
         if high_severity:
@@ -167,11 +172,19 @@ class ReviewValidatorAgent(BaseAgent):
             )
             status = "FAIL"
 
+        revision_instructions = (data.get("revision_instructions") or "").strip()
+        if status != "PASS" and not revision_instructions:
+            revision_instructions = (
+                "Revise the email to address the issues (clarity, tone alignment, and professionalism). "
+                "Apply only necessary edits; keep structure intact."
+            )
+
         report: Dict[str, Any] = {
             "status": "PASS" if status == "PASS" else "FAIL",
             "summary": data.get("summary") or "",
             "issues": issues,
             "suggested_edits": data.get("suggested_edits") or {},
+            "revision_instructions": revision_instructions,
         }
 
         is_valid = report["status"] == "PASS"

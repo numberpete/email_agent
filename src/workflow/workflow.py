@@ -88,6 +88,21 @@ class EmailWorkflow:
             logger.debug(f"Validation failed. Retry count now: {retry_count}")
             return {"retry_count": retry_count}
 
+        async def apply_revision_hints_node(state: AgentState) -> Dict[str, Any]:
+            report = state.get("validation_report") or {}
+            revision = (report.get("revision_instructions") or "").strip()
+
+            # Merge into constraints so DraftWriter can see it
+            constraints = dict(state.get("constraints") or {})
+            if revision:
+                constraints["revision_instructions"] = revision
+
+            logger.debug(
+                f"ApplyRevisionHints: revision_len={len(revision)} "
+                f"constraints_keys={list(constraints.keys())}"
+            )
+            return {"constraints": constraints}
+
         # ---- Register nodes ----
 
         builder.add_node("input_parser", input_parser_node)
@@ -98,7 +113,7 @@ class EmailWorkflow:
         builder.add_node("review_validator", review_validator_node)
         builder.add_node("memory", memory_node)
         builder.add_node("bump_retry", bump_retry_node)
-
+        builder.add_node("apply_revision_hints", apply_revision_hints_node)
 
         # Linear flow (first pass)
         builder.set_entry_point("input_parser")
@@ -136,7 +151,7 @@ class EmailWorkflow:
 
         def retry_router(state: AgentState):
             if (state.get("retry_count") or 0) < 2:
-                return "draft_writer"
+                return "apply_revision_hints"
             return "memory"
 
         builder.add_conditional_edges(
@@ -152,11 +167,12 @@ class EmailWorkflow:
             "bump_retry",
             retry_router,
             {
-                "draft_writer": "draft_writer",
+                "apply_revision_hints": "apply_revision_hints",
                 "memory": "memory",
             },
         )
 
+        builder.add_edge("apply_revision_hints", "draft_writer")
         builder.add_edge("memory", END)
 
         self.app = builder.compile()

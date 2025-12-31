@@ -90,21 +90,35 @@ class EmailWorkflow:
 
         async def apply_revision_hints_node(state: AgentState) -> Dict[str, Any]:
             report = state.get("validation_report") or {}
-            revision = (report.get("revision_instructions") or "").strip()
+            res = report.get("constraint_resolution") or {}
 
-            # Merge into constraints so DraftWriter can see it
+            if not isinstance(res, dict) or not res:
+                return {}
+
             constraints = dict(state.get("constraints") or {})
-            if revision:
-                constraints["revision_instructions"] = revision
+            tone_params = dict(state.get("tone_params") or {})
 
-            logger.debug(
-                f"ApplyRevisionHints: revision_len={len(revision)} "
-                f"constraints_keys={list(constraints.keys())}"
-            )
-            return {"constraints": constraints}
+            # Drop items from must_include
+            drop = res.get("drop_must_include") or []
+            if drop and isinstance(constraints.get("must_include"), list):
+                constraints["must_include"] = [x for x in constraints["must_include"] if x not in drop]
+
+            # Add items to must_avoid
+            add_avoid = res.get("add_must_avoid") or []
+            if add_avoid:
+                existing = constraints.get("must_avoid") or []
+                if not isinstance(existing, list):
+                    existing = []
+                constraints["must_avoid"] = list(dict.fromkeys(existing + add_avoid))
+
+            # Override tone label (optional)
+            override_tone = res.get("override_tone_label")
+            if override_tone and isinstance(override_tone, str) and override_tone.strip():
+                tone_params["tone_label"] = override_tone.strip()
+
+            return {"constraints": constraints, "tone_params": tone_params}
 
         # ---- Register nodes ----
-
         builder.add_node("input_parser", input_parser_node)
         builder.add_node("intent_detection", intent_detection_node)
         builder.add_node("tone_stylist", tone_stylist_node)

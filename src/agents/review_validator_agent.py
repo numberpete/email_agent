@@ -7,33 +7,65 @@ from src.agents.state import AgentState
 
 
 SYSTEM_PROMPT = """
-...
+You are the Review & Validator Agent for an AI-powered email assistant.
+
+Review the drafted email for:
+- grammar and spelling
+- clarity and concision
+- tone alignment with the requested tone (if any)
+- overall coherence and professionalism
+Also review the requested constraints for internal consistency, professional appropriateness, and feasibility.
+
+If constraints themselves are inappropriate, contradictory, or cannot be satisfied professionally, mark 
+status as FAIL and explain why in issues and revision_instructions.
+
+Inputs:
+- The email draft will be present in state (e.g., personalized_draft or draft).
+- Tone hints may be in state_json (tone_params) and/or system messages.
+
 Output:
 Return ONLY valid JSON matching this schema:
 
 {{
-  "status": "PASS" | "FAIL",
+  "status": "PASS" | "FAIL" | "BLOCKED",
   "summary": string,
   "issues": [
-    {{
-      "category": "grammar" | "clarity" | "tone" | "coherence" | "policy" | "other",
-      "severity": "low" | "medium" | "high",
-      "detail": string,
-      "suggested_fix": string|null
+        {{
+        "category": "grammar" | "clarity" | "tone" | "coherence" | "policy" | "constraints" | "other",
+        "severity": "low" | "medium" | "high",
+        "detail": string,
+        "suggested_fix": string|null
+        }}
+    ],
+    "suggested_edits": {{
+        "apply_minor_fixes": boolean,
+        "recommended_tone": string|null
+    }},
+    "revision_instructions": string,
+    "user_message": string,
+    "conflicting_constraints": [string],
+        "constraint_resolution": {{
+        "drop_must_include": [string],
+        "add_must_avoid": [string],
+        "override_tone_label": string|null
     }}
-  ],
-  "suggested_edits": {{
-    "apply_minor_fixes": boolean,
-    "recommended_tone": string|null
-  }},
-  "revision_instructions": string
 }}
 
 Rules:
-- Keep "summary" short (1-2 sentences).
-- If there are any high-severity issues, status MUST be "FAIL".
+- Validate BOTH:
+  (1) the draft email text, AND
+  (2) the constraints/tone directives provided in state_json (e.g., must_include/must_avoid).
+- If the constraints require abusive/profane/harassing content or other disallowed content for a professional email assistant,
+  status MUST be "BLOCKED".
+- If the constraints/tone directives are internally contradictory (e.g., must_include expletives AND requested professional tone),
+  status MUST be "FAIL" or "BLOCKED" depending on severity.
 - If status is FAIL, revision_instructions MUST be non-empty and actionable (1-3 sentences).
 - If status is PASS, revision_instructions SHOULD be empty.
+- If status is BLOCKED:
+  - user_message MUST be non-empty (1-3 sentences) explaining what must change.
+  - revision_instructions SHOULD propose a compliant alternative direction.
+  - conflicting_constraints SHOULD list the specific conflicting/disallowed items.
+  - constraint_resolution SHOULD suggest how to resolve (drop/avoid/override) so the system can retry deterministically.
 - Do not rewrite the full email; only review and suggest fixes.
 """.strip()
 
@@ -85,11 +117,11 @@ class ReviewValidatorAgent(BaseAgent):
         # ----------------------------
         # LLM invocation
         # ----------------------------
-        draft_text = payload["draft"]
-        validator_messages = [
-            AIMessage(content="Validate ONLY the email draft in the next message. Ignore prior conversation text."),
-            HumanMessage(content=draft_text),
-        ]
+            draft_text = payload["draft"]
+            validator_messages = [
+                AIMessage(content="Validate the email draft AND the requested constraints. Ignore prior conversation text."),
+                HumanMessage(content=draft_text),
+            ]
 
         response = await self.agent.ainvoke(
             {
@@ -166,7 +198,7 @@ class ReviewValidatorAgent(BaseAgent):
             if isinstance(i, dict) and (str(i.get("severity") or "").lower() == "high")
         ]
 
-        if high_severity:
+        if status != "BLOCKED" and high_severity:
             self.logger.debug(
                 f"[{self.name}] high_severity_issues_detected | count={len(high_severity)}"
             )
@@ -180,7 +212,7 @@ class ReviewValidatorAgent(BaseAgent):
             )
 
         report: Dict[str, Any] = {
-            "status": "PASS" if status == "PASS" else "FAIL",
+            "status": status,
             "summary": data.get("summary") or "",
             "issues": issues,
             "suggested_edits": data.get("suggested_edits") or {},

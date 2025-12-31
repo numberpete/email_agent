@@ -215,6 +215,7 @@ with left:
             height=50,
         )
 
+
     with st.expander("Agent Trace (debug)", expanded=False):
         resp = st.session_state.get("last_response") or {}
         vr = st.session_state.get("validation_report")
@@ -222,6 +223,32 @@ with left:
         if not resp:
             st.caption("No debug data yet. Generate an email to populate the trace.")
         else:
+            if vr.get("status") == "FAIL":
+                st.warning("Draft requires revision")
+                st.markdown("**Revision Instructions:**")
+                st.markdown(vr.get("revision_instructions", "_None_"))
+
+                status = (vr.get("status") or "").upper()
+
+                if status == "BLOCKED":
+                    st.error(vr.get("user_message") or "Request blocked.")
+
+                    if st.button("Generate a professional version anyway"):
+                        # apply validator-directed constraint resolution
+                        resolution = vr.get("constraint_resolution") or {}
+                        metadata = metadata or {}
+                        metadata["apply_constraint_resolution"] = True
+                        metadata["constraint_resolution"] = resolution
+
+                        response = run_async(
+                            st.session_state.workflow.run_query(
+                                user_input=user_query,
+                                tone=tone_override,
+                                intent=intent_override,
+                                metadata=metadata,
+                            )
+                        )
+
             # Minimal quick sanity: show what keys you actually have
             st.caption(f"Response keys: {', '.join(sorted(resp.keys()))}")
 

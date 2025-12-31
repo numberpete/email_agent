@@ -224,3 +224,136 @@ async def test_validator_sends_reduced_state_json_payload():
     payload = raw_state_json if isinstance(raw_state_json, dict) else json.loads(raw_state_json)
     assert set(payload.keys()) == {"draft", "tone_params", "intent", "constraints"}
     assert payload["draft"] == "personalized"
+
+@pytest.mark.asyncio
+async def test_validator_passes_on_clean_draft():
+    agent = ReviewValidatorAgent(llm=MOCK_LLM, logger=DummyLogger())
+
+    # Force the agent to use our stub chain instead of a real LLM runnable
+    agent.agent = FakeChain(
+        json.dumps(
+            {
+                "status": "PASS",
+                "summary": "Looks good.",
+                "issues": [],
+                "suggested_edits": {"apply_minor_fixes": True, "recommended_tone": None},
+                "revision_instructions": "",
+            }
+        )
+    )
+
+    state = {
+        "messages": [HumanMessage(content="Write an email")],
+        "draft": "Hello Jordan,\n\nCould you please replace the item?\n\nThanks,\nPeter",
+        "personalized_draft": "",
+        "tone_params": {"tone_label": "formal"},
+        "intent": "request",
+        "constraints": {},
+    }
+
+    _, updates = await agent._execute(state)
+
+    report = updates["validation_report"]
+    assert report["status"] == "PASS"
+    assert updates["is_valid"] is True
+    assert report.get("revision_instructions", "") == ""
+
+
+@pytest.mark.asyncio
+async def test_validator_fails_when_high_severity_issue_present():
+    agent = ReviewValidatorAgent(llm=MOCK_LLM, logger=DummyLogger())
+    agent.agent = FakeChain(
+        json.dumps(
+            {
+                "status": "PASS",  # model claims PASS
+                "summary": "But actually there is a major issue.",
+                "issues": [
+                    {
+                        "category": "tone",
+                        "severity": "high",
+                        "detail": "Overly aggressive / insulting.",
+                        "suggested_fix": "Soften and remove insults.",
+                    }
+                ],
+                "suggested_edits": {"apply_minor_fixes": False, "recommended_tone": "professional"},
+                "revision_instructions": "Rewrite without insults; keep professional tone.",
+            }
+        )
+    )
+
+    state = {
+        "messages": [HumanMessage(content="Write an email")],
+        "draft": "You are an idiot. Replace it now.",
+        "tone_params": {"tone_label": "assertive"},
+        "intent": "request",
+        "constraints": {},
+    }
+
+    _, updates = await agent._execute(state)
+    report = updates["validation_report"]
+
+    # Your agent enforces FAIL if any high severity issue exists
+    assert report["status"] == "FAIL"
+    assert updates["is_valid"] is False
+
+
+@pytest.mark.asyncio
+async def test_validator_non_json_output_fails_soft_and_shape_is_stable():
+    agent = ReviewValidatorAgent(llm=MOCK_LLM, logger=DummyLogger())
+
+    # Return non-JSON on purpose
+    agent.agent = FakeChain("**PASS** Looks fine")  # invalid JSON
+
+    state = {
+        "messages": [HumanMessage(content="Write an email")],
+        "draft": "Hello Jordan,\n\nThanks.\n\nPeter",
+        "tone_params": {"tone_label": "formal"},
+        "intent": "info",
+        "constraints": {},
+    }
+
+    _, updates = await agent._execute(state)
+    report = updates["validation_report"]
+
+    assert report["status"] == "FAIL"
+    assert updates["is_valid"] is False
+
+    # Ensure stable shape keys you rely on
+    assert "issues" in report
+    assert "suggested_edits" in report
+    assert "revision_instructions" in report
+
+
+@pytest.mark.asyncio
+async def test_validator_reduced_payload_contains_expected_keys():
+    agent = ReviewValidatorAgent(llm=MOCK_LLM, logger=DummyLogger())
+    agent.agent = FakeChain(
+        json.dumps(
+            {
+                "status": "PASS",
+                "summary": "OK",
+                "issues": [],
+                "suggested_edits": {"apply_minor_fixes": True, "recommended_tone": None},
+                "revision_instructions": "",
+            }
+        )
+    )
+
+    state = {
+        "messages": [HumanMessage(content="Write an email")],
+        "draft": "DRAFT",
+        "personalized_draft": "PERSONALIZED",
+        "tone_params": {"tone_label": "friendly"},
+        "intent": "other",
+        "constraints": {"use_bullets": False},
+    }
+
+    await agent._execute(state)
+
+    # The validator should see only the reduced payload as state_json
+    raw_state_json = agent.agent.last_input["state_json"]
+    payload = raw_state_json if isinstance(raw_state_json, dict) else json.loads(raw_state_json)
+
+    assert set(payload.keys()) == {"draft", "tone_params", "intent", "constraints"}
+    assert payload["draft"] == "PERSONALIZED"
+    assert payload["constraints"]["use_bullets"] is False

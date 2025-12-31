@@ -20,6 +20,7 @@ Instructions:
 - Produce the final email draft in plain text.
 - Respect the length budget (max_words, max_paragraphs).
 - Preserve the overall structure from the rendered skeleton.
+- If constraints.revision_instructions is present, revise the draft to satisfy it, even if it conflicts with earlier draft choices.
 - Do not output JSON. Do not output analysis. Output only the email.
 """.strip()
 

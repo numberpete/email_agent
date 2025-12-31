@@ -68,9 +68,6 @@ async def test_tone_ui_override_used(tone_agent):
                     "warmth": 90,
                     "directness": 40,
                     "confidence": 0.9,
-                    "do": ["be warm"],
-                    "dont": ["be stiff"],
-                    "lexical_hints": {"greetings": ["Hey"], "closings": ["Cheers"], "phrases": ["Just checking in"]},
                 },
                 "reason": "model output",
             }
@@ -96,9 +93,6 @@ async def test_tone_model_json_normalizes_fields(tone_agent):
                     "warmth": -10,            # should clamp to 0
                     "directness": "80",       # should coerce to int
                     "confidence": 1.5,        # should clamp to 1.0
-                    "do": "not-a-list",       # should become []
-                    "dont": None,             # should become []
-                    "lexical_hints": "oops",  # should become dict with lists
                 },
                 "reason": "Implied friendly tone.",
             }
@@ -115,12 +109,6 @@ async def test_tone_model_json_normalizes_fields(tone_agent):
     assert tp["warmth"] == 0
     assert tp["directness"] == 80
     assert tp["confidence"] == 1.0
-    assert isinstance(tp["do"], list)
-    assert isinstance(tp["dont"], list)
-    assert isinstance(tp["lexical_hints"], dict)
-    assert isinstance(tp["lexical_hints"].get("greetings"), list)
-    assert isinstance(tp["lexical_hints"].get("closings"), list)
-    assert isinstance(tp["lexical_hints"].get("phrases"), list)
 
 
 @pytest.mark.asyncio
@@ -133,9 +121,6 @@ async def test_tone_non_json_fails_soft_to_default(tone_agent):
 
     assert updates["tone_source"] == "default"
     assert updates["tone_params"]["tone_label"] == "neutral"
-    # Ensure some expected default structure exists
-    assert "lexical_hints" in updates["tone_params"]
-    assert isinstance(updates["tone_params"]["lexical_hints"], dict)
 
 
 @pytest.mark.asyncio

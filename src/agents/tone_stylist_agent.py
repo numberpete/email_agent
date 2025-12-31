@@ -30,20 +30,12 @@ Return ONLY valid JSON exactly matching this schema:
     "warmth": 0-100,                          // higher = friendlier / more personable
     "directness": 0-100,                      // higher = more direct / concise
     "confidence": 0.0-1.0,                    // confidence in tone selection
-    "do": ["<short directive>", ...],         // 3-6 items
-    "dont": ["<short directive>", ...],       // 2-5 items
-    "lexical_hints": {{
-      "greetings": ["<example>", ...],        // 1-3 examples
-      "closings": ["<example>", ...],         // 1-3 examples
-      "phrases": ["<example>", ...]           // 2-5 examples of phrasing
-    }}
   }},
   "reason": "<short explanation, 1 sentence>"
 }}
 
 Rules:
 - Do NOT draft the email.
-- Keep all strings short and actionable.
 - If tone is not specified, infer a reasonable default from context (usually neutral-professional).
 - "tone_label" should be stable, lowercase, and underscore-free (e.g., "follow_up" is NOT a tone).
 """.strip()
@@ -113,13 +105,6 @@ class ToneStylistAgent(BaseAgent):
                 "warmth": 45,
                 "directness": 65,
                 "confidence": 0.3,
-                "do": ["be clear", "be concise", "use professional language"],
-                "dont": ["use slang", "over-explain"],
-                "lexical_hints": {
-                    "greetings": ["Hi [Name],"],
-                    "closings": ["Best,", "Thanks,"],
-                    "phrases": ["I wanted to follow up on...", "Could you please..."],
-                },
             }
 
             updates = {
@@ -146,13 +131,6 @@ class ToneStylistAgent(BaseAgent):
                 "warmth": 45,
                 "directness": 65,
                 "confidence": 0.3,
-                "do": ["be clear", "be concise", "use professional language"],
-                "dont": ["use slang", "over-explain"],
-                "lexical_hints": {
-                    "greetings": ["Hi [Name],"],
-                    "closings": ["Best,", "Thanks,"],
-                    "phrases": ["I wanted to follow up on...", "Could you please..."],
-                },
             }
             reason = reason or "Applied default tone due to empty model output."
             updates: Dict[str, Any] = {"tone_params": tone_params, "tone_source": "default"}
@@ -182,20 +160,6 @@ class ToneStylistAgent(BaseAgent):
         tone_params["directness"] = clamp_int(tone_params.get("directness"), 0, 100, 65)
         tone_params["confidence"] = clamp_float(tone_params.get("confidence"), 0.0, 1.0, 0.6)
 
-        # Ensure lists exist
-        if not isinstance(tone_params.get("do"), list):
-            tone_params["do"] = []
-        if not isinstance(tone_params.get("dont"), list):
-            tone_params["dont"] = []
-
-        lexical = tone_params.get("lexical_hints") or {}
-        if not isinstance(lexical, dict):
-            lexical = {}
-        for k in ("greetings", "closings", "phrases"):
-            v = lexical.get(k)
-            if not isinstance(v, list):
-                lexical[k] = []
-        tone_params["lexical_hints"] = lexical
 
         updates: Dict[str, Any] = {
             "tone_params": tone_params,

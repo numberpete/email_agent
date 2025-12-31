@@ -88,8 +88,37 @@ class EmailWorkflow:
             logger.debug(f"Validation failed. Retry count now: {retry_count}")
             return {"retry_count": retry_count}
 
-        # ---- Register nodes ----
+        async def apply_revision_hints_node(state: AgentState) -> Dict[str, Any]:
+            report = state.get("validation_report") or {}
+            res = report.get("constraint_resolution") or {}
 
+            if not isinstance(res, dict) or not res:
+                return {}
+
+            constraints = dict(state.get("constraints") or {})
+            tone_params = dict(state.get("tone_params") or {})
+
+            # Drop items from must_include
+            drop = res.get("drop_must_include") or []
+            if drop and isinstance(constraints.get("must_include"), list):
+                constraints["must_include"] = [x for x in constraints["must_include"] if x not in drop]
+
+            # Add items to must_avoid
+            add_avoid = res.get("add_must_avoid") or []
+            if add_avoid:
+                existing = constraints.get("must_avoid") or []
+                if not isinstance(existing, list):
+                    existing = []
+                constraints["must_avoid"] = list(dict.fromkeys(existing + add_avoid))
+
+            # Override tone label (optional)
+            override_tone = res.get("override_tone_label")
+            if override_tone and isinstance(override_tone, str) and override_tone.strip():
+                tone_params["tone_label"] = override_tone.strip()
+
+            return {"constraints": constraints, "tone_params": tone_params}
+
+        # ---- Register nodes ----
         builder.add_node("input_parser", input_parser_node)
         builder.add_node("intent_detection", intent_detection_node)
         builder.add_node("tone_stylist", tone_stylist_node)
@@ -98,7 +127,7 @@ class EmailWorkflow:
         builder.add_node("review_validator", review_validator_node)
         builder.add_node("memory", memory_node)
         builder.add_node("bump_retry", bump_retry_node)
-
+        builder.add_node("apply_revision_hints", apply_revision_hints_node)
 
         # Linear flow (first pass)
         builder.set_entry_point("input_parser")
@@ -136,7 +165,7 @@ class EmailWorkflow:
 
         def retry_router(state: AgentState):
             if (state.get("retry_count") or 0) < 2:
-                return "draft_writer"
+                return "apply_revision_hints"
             return "memory"
 
         builder.add_conditional_edges(
@@ -152,11 +181,12 @@ class EmailWorkflow:
             "bump_retry",
             retry_router,
             {
-                "draft_writer": "draft_writer",
+                "apply_revision_hints": "apply_revision_hints",
                 "memory": "memory",
             },
         )
 
+        builder.add_edge("apply_revision_hints", "draft_writer")
         builder.add_edge("memory", END)
 
         self.app = builder.compile()

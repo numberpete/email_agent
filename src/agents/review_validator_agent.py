@@ -1,8 +1,7 @@
 import json
 from typing import Any, Dict, List, Tuple
 
-from langchain_core.messages import AIMessage, BaseMessage
-
+from langchain_core.messages import BaseMessage, AIMessage, HumanMessage 
 from src.agents.base_agent import BaseAgent
 from src.agents.state import AgentState
 
@@ -15,6 +14,10 @@ Review the drafted email for:
 - clarity and concision
 - tone alignment with the requested tone (if any)
 - overall coherence and professionalism
+Also review the requested constraints for internal consistency, professional appropriateness, and feasibility.
+
+If constraints themselves are inappropriate, contradictory, or cannot be satisfied professionally, mark 
+status as FAIL and explain why in issues and revision_instructions.
 
 Inputs:
 - The email draft will be present in state (e.g., personalized_draft or draft).
@@ -24,25 +27,45 @@ Output:
 Return ONLY valid JSON matching this schema:
 
 {{
-  "status": "PASS" | "FAIL",
+  "status": "PASS" | "FAIL" | "BLOCKED",
   "summary": string,
   "issues": [
-    {{
-      "category": "grammar" | "clarity" | "tone" | "coherence" | "policy" | "other",
-      "severity": "low" | "medium" | "high",
-      "detail": string,
-      "suggested_fix": string|null
+        {{
+        "category": "grammar" | "clarity" | "tone" | "coherence" | "policy" | "constraints" | "other",
+        "severity": "low" | "medium" | "high",
+        "detail": string,
+        "suggested_fix": string|null
+        }}
+    ],
+    "suggested_edits": {{
+        "apply_minor_fixes": boolean,
+        "recommended_tone": string|null
+    }},
+    "revision_instructions": string,
+    "user_message": string,
+    "conflicting_constraints": [string],
+        "constraint_resolution": {{
+        "drop_must_include": [string],
+        "add_must_avoid": [string],
+        "override_tone_label": string|null
     }}
-  ],
-  "suggested_edits": {{
-    "apply_minor_fixes": boolean,
-    "recommended_tone": string|null
-  }}
 }}
 
 Rules:
-- Keep "summary" short (1-2 sentences).
-- If there are any high-severity issues, status MUST be "FAIL".
+- Validate BOTH:
+  (1) the draft email text, AND
+  (2) the constraints/tone directives provided in state_json (e.g., must_include/must_avoid).
+- If the constraints require abusive/profane/harassing content or other disallowed content for a professional email assistant,
+  status MUST be "BLOCKED".
+- If the constraints/tone directives are internally contradictory (e.g., must_include expletives AND requested professional tone),
+  status MUST be "FAIL" or "BLOCKED" depending on severity.
+- If status is FAIL, revision_instructions MUST be non-empty and actionable (1-3 sentences).
+- If status is PASS, revision_instructions SHOULD be empty.
+- If status is BLOCKED:
+  - user_message MUST be non-empty (1-3 sentences) explaining what must change.
+  - revision_instructions SHOULD propose a compliant alternative direction.
+  - conflicting_constraints SHOULD list the specific conflicting/disallowed items.
+  - constraint_resolution SHOULD suggest how to resolve (drop/avoid/override) so the system can retry deterministically.
 - Do not rewrite the full email; only review and suggest fixes.
 """.strip()
 
@@ -61,8 +84,13 @@ class ReviewValidatorAgent(BaseAgent):
 
     async def _execute(self, state: AgentState) -> Tuple[List[BaseMessage], Dict[str, Any]]:
         messages = state.get("messages", [])
-        state_json = self._safe_state_json(state)
 
+        payload = {
+            "draft": state.get("personalized_draft") or state.get("draft") or "",
+            "tone_params": state.get("tone_params") or {},
+            "intent": state.get("intent") or "",
+            "constraints": state.get("constraints") or {},
+        }
         # ----------------------------
         # DEBUG: inputs
         # ----------------------------
@@ -79,18 +107,26 @@ class ReviewValidatorAgent(BaseAgent):
                 f"[{self.name}] last_message_preview={last_content[:200]!r}"
             )
 
-        if state_json:
+
+        if payload:
+            payload_str = str(payload) if not isinstance(payload, str) else payload
             self.logger.debug(
-                f"[{self.name}] state_json_preview={state_json[:500]!r}"
+                f"[{self.name}] state_json_preview={payload_str!r}"
             )
 
         # ----------------------------
         # LLM invocation
         # ----------------------------
+            draft_text = payload["draft"]
+            validator_messages = [
+                AIMessage(content="Validate the email draft AND the requested constraints. Ignore prior conversation text."),
+                HumanMessage(content=draft_text),
+            ]
+
         response = await self.agent.ainvoke(
             {
-                "messages": messages,
-                "state_json": state_json,
+                "messages": validator_messages,
+                "state_json": payload,
             }
         )
 
@@ -101,7 +137,7 @@ class ReviewValidatorAgent(BaseAgent):
 
         if content:
             self.logger.debug(
-                f"[{self.name}] response_preview={content[:400]!r}"
+                f"[{self.name}] response_preview={content!r}"
             )
 
         # ----------------------------
@@ -132,6 +168,7 @@ class ReviewValidatorAgent(BaseAgent):
                     "apply_minor_fixes": False,
                     "recommended_tone": None,
                 },
+                "revision_instructions": "",
             }
 
             self.logger.debug(
@@ -158,20 +195,28 @@ class ReviewValidatorAgent(BaseAgent):
         # Check for high-severity issues
         high_severity = [
             i for i in issues
-            if isinstance(i, dict) and i.get("severity") == "high"
+            if isinstance(i, dict) and (str(i.get("severity") or "").lower() == "high")
         ]
 
-        if high_severity:
+        if status != "BLOCKED" and high_severity:
             self.logger.debug(
                 f"[{self.name}] high_severity_issues_detected | count={len(high_severity)}"
             )
             status = "FAIL"
 
+        revision_instructions = (data.get("revision_instructions") or "").strip()
+        if status != "PASS" and not revision_instructions:
+            revision_instructions = (
+                "Revise the email to address the issues (clarity, tone alignment, and professionalism). "
+                "Apply only necessary edits; keep structure intact."
+            )
+
         report: Dict[str, Any] = {
-            "status": "PASS" if status == "PASS" else "FAIL",
+            "status": status,
             "summary": data.get("summary") or "",
             "issues": issues,
             "suggested_edits": data.get("suggested_edits") or {},
+            "revision_instructions": revision_instructions,
         }
 
         is_valid = report["status"] == "PASS"

@@ -17,7 +17,7 @@ Review the drafted email for:
 Also review the requested constraints for internal consistency, professional appropriateness, and feasibility.
 
 If constraints themselves are inappropriate, contradictory, or cannot be satisfied professionally, mark 
-status as FAIL and explain why in issues and revision_instructions.
+status as BLOCKED and explain why in issues and revision_instructions.
 
 Inputs:
 - The email draft will be present in state (e.g., personalized_draft or draft).

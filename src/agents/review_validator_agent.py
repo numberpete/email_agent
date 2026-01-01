@@ -13,17 +13,24 @@ Review the drafted email for:
 - grammar and spelling
 - clarity and concision
 - tone alignment with the requested tone (if any)
-- overall coherence and professionalism
-- takes into consideration, or doesn't contradict, any past_summary of conversation history (if provided)
+- overall coherence, professionalism, and CONTEXTUAL correctness
 Also review the requested constraints for internal consistency, professional appropriateness, and feasibility.
+
+IMPORTANT: Contextual correctness means the draft must match the user's intended goal and context from state_json:
+- parsed_input.primary_request (the goal)
+- parsed_input.recipient (who it is to, if provided)
+- parsed_input.context (background, if provided)
+- past_summary (if provided; maintain continuity, do not contradict)
+- constraints (must_include/must_avoid/use_bullets/etc.)
+- tone_params (tone_label, formality/warmth/directness, etc.)
 
 If constraints themselves are inappropriate, contradictory, or cannot be satisfied professionally, mark 
 status as BLOCKED and explain why in issues and revision_instructions.
 
 Inputs:
-- The email draft will be present in state (e.g., personalized_draft or draft).
-- Tone hints may be in state_json (tone_params) and/or system messages.
-- Summary of past interactions may be in state_json (past_summary).
+- The email draft will be present in state_json as personalized_draft or draft.
+- parsed_input and constraints are present in state_json.
+- past_summary may be present in state_json.
 
 Output:
 Return ONLY valid JSON matching this schema:
@@ -32,37 +39,48 @@ Return ONLY valid JSON matching this schema:
   "status": "PASS" | "FAIL" | "BLOCKED",
   "summary": string,
   "issues": [
-        {{
-        "category": "grammar" | "clarity" | "tone" | "coherence" | "policy" | "constraints" | "other",
-        "severity": "low" | "medium" | "high",
-        "detail": string,
-        "suggested_fix": string|null
-        }}
-    ],
-    "suggested_edits": {{
-        "apply_minor_fixes": boolean,
-        "recommended_tone": string|null
-    }},
-    "revision_instructions": string,
-    "user_message": string,
-    "conflicting_constraints": [string],
-        "constraint_resolution": {{
-        "drop_must_include": [string],
-        "add_must_avoid": [string],
-        "override_tone_label": string|null
+    {{
+      "category": "grammar" | "clarity" | "tone" | "coherence" | "policy" | "constraints" | "other",
+      "severity": "low" | "medium" | "high",
+      "detail": string,
+      "suggested_fix": string|null
     }}
+  ],
+  "suggested_edits": {{
+    "apply_minor_fixes": boolean,
+    "recommended_tone": string|null
+  }},
+  "revision_instructions": string,
+  "user_message": string,
+  "conflicting_constraints": [string],
+  "constraint_resolution": {{
+    "drop_must_include": [string],
+    "add_must_avoid": [string],
+    "override_tone_label": string|null
+  }}
 }}
 
 Rules:
 - Validate BOTH:
   (1) the draft email text, AND
-  (2) the constraints/tone directives provided in state_json (e.g., must_include/must_avoid).
-- If the constraints require abusive/profane/harassing content or other disallowed content for a professional email assistant,
+  (2) the constraints/tone directives provided in state_json.
+- Before deciding PASS/FAIL/BLOCKED, run this REQUIRED contextual-coherence checklist:
+  A) Goal match: Does the draft clearly achieve parsed_input.primary_request?
+  B) Missing key context: If parsed_input.context exists, is it reflected?
+  C) Recipient correctness: If parsed_input.recipient has name/role/relationship, is the email consistent (salutation or reference)?
+  D) Continuity: If past_summary exists, does the draft avoid contradictions and avoid re-introducing as first contact?
+  E) Constraints satisfaction: must_include present? must_avoid avoided? use_bullets respected?
+  F) Tone: tone_params respected.
+
+- If ANY checklist item A, D, or E fails in a material way, status MUST be FAIL (or BLOCKED if policy/abuse).
+- For checklist failures, you MUST include at least one "coherence" or "constraints" issue whose detail includes:
+  - the failed checklist letter(s) (e.g., "A,E")
+  - 1 short quoted snippet (<=20 words) from the draft showing the problem OR stating "missing" if absent
+
+- If constraints require abusive/profane/harassing content or other disallowed content,
   status MUST be "BLOCKED".
-- If the constraints/tone directives are internally contradictory (e.g., must_include expletives AND requested professional tone),
-  status MUST be "FAIL" or "BLOCKED" depending on severity.
 - If status is FAIL, revision_instructions MUST be non-empty and actionable (1-3 sentences).
-- If status is PASS, revision_instructions SHOULD be empty.
+- If status is PASS, revision_instructions SHOULD be empty, but if there are minor suggestions, they can be included.
 - If status is BLOCKED:
   - user_message MUST be non-empty (1-3 sentences) explaining what must change.
   - revision_instructions SHOULD propose a compliant alternative direction.
@@ -70,6 +88,7 @@ Rules:
   - constraint_resolution SHOULD suggest how to resolve (drop/avoid/override) so the system can retry deterministically.
 - Do not rewrite the full email; only review and suggest fixes.
 """.strip()
+
 
 
 class ReviewValidatorAgent(BaseAgent):

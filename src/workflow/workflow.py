@@ -1,9 +1,12 @@
 import logging, json
 from typing import Dict, Any
-
+from pathlib import Path
 from langchain_litellm import ChatLiteLLMRouter
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.memory import MemorySaver
+
+
 
 from src.agents.state import AgentState
 
@@ -20,11 +23,15 @@ from src.agents.review_validator_agent import ReviewValidatorAgent
 from src.agents.memory_agent import MemoryAgent
 from src.utils.logging import ecid_var
 from src.utils.recipient import normalize_recipient
+from src.utils.sessionid import create_session_id
 from src.workflow.router import LLM_ROUTER
 import uuid_utils as uuid
 
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+
 class EmailWorkflow:
     def __init__(self, logger: logging.Logger):
+        
         # ------------------------------------------------------------------
         # 1. Model setup (explicit and intentional)
         # ------------------------------------------------------------------
@@ -192,7 +199,25 @@ class EmailWorkflow:
         builder.add_edge("apply_revision_hints", "draft_writer")
         builder.add_edge("memory", END)
 
-        self.app = builder.compile()
+        # Checkpointing setup
+        try:
+            # Use in-memory checkpointer - works perfectly with async
+            self.checkpointer = MemorySaver()
+            self.app = builder.compile(checkpointer=self.checkpointer)
+            self.logger.info("Checkpointing initialized (in-memory)")
+        except Exception as e:
+            self.logger.error(f"Failed to initialize checkpointing: {e}")
+            self.app = builder.compile()
+
+    
+    def close(self):
+        try:
+            if hasattr(self, "_ckpt_con"):
+                self._ckpt_con.close()
+                self.logger.info("Checkpointing connection closed.")
+        except Exception as e:
+            self.logger.error(f"Error closing checkpointing connection: {e}")
+            pass
 
     # ----------------------------------------------------------------------
     # 4. UI-facing entry point
@@ -279,10 +304,17 @@ class EmailWorkflow:
             id(self),
         )
 
+        thread_id =create_session_id(user_id)
+
         final_state = await self.app.ainvoke(
             initial_state,
-            config={"recursion_limit": 50}
+            config={"configurable": {"thread_id": thread_id}, "recursion_limit": 50}
         )
+
+        if hasattr(self.checkpointer, 'storage'):
+            checkpoints = list(self.checkpointer.storage.keys())
+            self.logger.debug(f"Checkpoints after query: {checkpoints}")
+            self.logger.debug(f"Total checkpoints: {len(self.checkpointer.storage)}")
 
         debug_snapshot = {
             "intent": final_state.get("intent"),

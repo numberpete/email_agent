@@ -10,14 +10,16 @@ from src.agents.state import AgentState
 from src.agents.input_parser_agent import InputParsingAgent
 from src.agents.intent_detection_agent import IntentDetectionAgent
 from src.agents.tone_stylist_agent import ToneStylistAgent
-from src.templates.sqlite_store import SQLiteTemplateStore
+from src.templates.sqlite_template_store import SQLiteTemplateStore
 from src.templates.engine import EmailTemplateEngine
 from src.agents.draft_writer_agent import DraftWriterAgent
 from src.profiles.sqlite_profile_store import SQLiteProfileStore
+from src.memory.sqlite_memory_store import SQLiteMemoryStore
 from src.agents.personalization_agent import PersonalizationAgent
 from src.agents.review_validator_agent import ReviewValidatorAgent
-from src.agents.routing_memory_agent import RoutingMemoryAgent
+from src.agents.memory_agent import MemoryAgent
 from src.utils.logging import ecid_var
+from src.utils.recipient import normalize_recipient
 from src.workflow.router import LLM_ROUTER
 import uuid_utils as uuid
 
@@ -40,12 +42,13 @@ class EmailWorkflow:
         template_store = SQLiteTemplateStore(db_path)
         template_engine = EmailTemplateEngine(template_store)
         profile_store = SQLiteProfileStore(db_path)
+        memory_store = SQLiteMemoryStore(db_path)
 
         self.draft_writer = DraftWriterAgent(creative_llm, logger, template_engine)
 
-        self.personalizer = PersonalizationAgent(deterministic_llm, logger, profile_store)
+        self.personalizer = PersonalizationAgent(deterministic_llm, logger, profile_store, memory_store)
         self.validator = ReviewValidatorAgent(deterministic_llm, logger)
-        self.memory_agent = RoutingMemoryAgent(deterministic_llm, logger)
+        self.memory_agent = MemoryAgent(deterministic_llm, logger, memory_store=memory_store)
         self.logger = logger
 
         # ------------------------------------------------------------------
@@ -221,9 +224,13 @@ class EmailWorkflow:
         user_id = "default" #for personalization
         messages = []
         initial_constraints: Dict[str, Any] = {}
+        recipient = {}
+
         if metadata_dict:
             initial_constraints.update(metadata_dict)
             user_id = (metadata.get("user_id") or user_id)
+            if "recipient" in metadata_dict and isinstance(metadata_dict["recipient"], dict):
+                recipient = normalize_recipient(recipient, metadata_dict["recipient"])
             messages.append(SystemMessage(content=f"METADATA (authoritative): {json.dumps(metadata)}"))
         if intent:
             # Optional: keep the UI override visible in state for debugging

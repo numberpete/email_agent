@@ -14,6 +14,7 @@ Review the drafted email for:
 - clarity and concision
 - tone alignment with the requested tone (if any)
 - overall coherence and professionalism
+- takes into consideration, or doesn't contradict, any past_summary of conversation history (if provided)
 Also review the requested constraints for internal consistency, professional appropriateness, and feasibility.
 
 If constraints themselves are inappropriate, contradictory, or cannot be satisfied professionally, mark 
@@ -22,6 +23,7 @@ status as BLOCKED and explain why in issues and revision_instructions.
 Inputs:
 - The email draft will be present in state (e.g., personalized_draft or draft).
 - Tone hints may be in state_json (tone_params) and/or system messages.
+- Summary of past interactions may be in state_json (past_summary).
 
 Output:
 Return ONLY valid JSON matching this schema:

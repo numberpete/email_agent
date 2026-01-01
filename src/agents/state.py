@@ -32,6 +32,9 @@ class AgentState(TypedDict, total=False):
     user_context: Dict[str, Any]        # profile data, preferences
     memory_updates: Dict[str, Any]      # safe-to-persist deltas only
 
+    # ===== Conversation context (for PersonalizationAgent) =====
+    conversation_context: Dict[str, Any]  # running summary + last N messages
+
     # ===== Validation =====
     is_valid: bool
     validation_report: Dict[str, Any]   # errors, warnings, auto-fixes

@@ -1,6 +1,6 @@
 import pytest
 
-from src.templates.sqlite_store import SQLiteTemplateStore
+from src.templates.sqlite_template_store import SQLiteTemplateStore
 
 
 def test_sqlite_template_store_selects_exact_match(tmp_path):

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 
-from src.templates.sqlite_store import SQLiteTemplateStore
+from src.templates.sqlite_template_store import SQLiteTemplateStore
 from src.templates.fixtures.templates import TEMPLATES
 
 

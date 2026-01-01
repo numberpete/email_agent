@@ -1,9 +1,9 @@
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
-from langchain_core.runnables import RunnableLambda
 
 from src.agents.personalization_agent import PersonalizationAgent
 from src.profiles.sqlite_profile_store import SQLiteProfileStore
+from src.memory.sqlite_memory_store import SQLiteMemoryStore
 from tests.utils.mock_llm import MOCK_LLM
 
 class DummyLogger:
@@ -25,9 +25,10 @@ class FakeChain:
 async def test_personalizer_loads_profile_and_updates_user_context(tmp_path):
     db = tmp_path / "test.db"
     store = SQLiteProfileStore(str(db))
+    mem_store = SQLiteMemoryStore(str(db))
     store.upsert_profile("default", {"name": "Peter Hanus", "title": "Principal Site Reliability Developer"})
 
-    agent = PersonalizationAgent(llm=MOCK_LLM, logger=DummyLogger(), profile_store=store)
+    agent = PersonalizationAgent(llm=MOCK_LLM, logger=DummyLogger(), profile_store=store, memory_store=mem_store)
     agent.agent = FakeChain('{"personalized_draft":"Hi.\\n\\nThanks,\\nPeter Hanus","memory_updates":{}}')
 
     state = {
@@ -48,9 +49,11 @@ async def test_personalizer_loads_profile_and_updates_user_context(tmp_path):
 async def test_personalizer_fail_soft_on_non_json(tmp_path):
     db = tmp_path / "test.db"
     store = SQLiteProfileStore(str(db))
+    mem_store = SQLiteMemoryStore(str(db))
+
     store.upsert_profile("default", {"name": "Peter Hanus"})
 
-    agent = PersonalizationAgent(llm=MOCK_LLM, logger=DummyLogger(), profile_store=store)
+    agent = PersonalizationAgent(llm=MOCK_LLM, logger=DummyLogger(), profile_store=store, memory_store=mem_store)
     agent.agent = FakeChain("NOT JSON")
 
     draft = "Hi.\n\nThanks,\n[Your Name]"

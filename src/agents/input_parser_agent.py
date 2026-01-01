@@ -49,7 +49,9 @@ Return ONLY valid JSON matching this schema:
     "recipient": {{
       "name": string|null,
       "role": string|null,
-      "relationship": string|null
+      "relationship": string|null,
+      "org": string|null,
+      "email": string|null
     }},
     "context": string|null
   }},

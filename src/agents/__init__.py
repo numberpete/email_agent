@@ -4,7 +4,7 @@ from .tone_stylist_agent import ToneStylistAgent
 from .draft_writer_agent import DraftWriterAgent
 from .personalization_agent import PersonalizationAgent
 from .review_validator_agent import ReviewValidatorAgent
-from .routing_memory_agent import RoutingMemoryAgent
+from .memory_agent import MemoryAgent
 
 __all__ = [
     "InputParsingAgent",
@@ -13,5 +13,5 @@ __all__ = [
     "DraftWriterAgent",
     "PersonalizationAgent",
     "ReviewValidatorAgent",
-    "RoutingMemoryAgent",
+    "MemoryAgent",
 ]

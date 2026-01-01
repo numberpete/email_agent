@@ -8,6 +8,8 @@ from langchain_core.messages import AIMessage, BaseMessage
 from src.agents.base_agent import BaseAgent
 from src.agents.state import AgentState
 from src.profiles.sqlite_profile_store import SQLiteProfileStore
+from src.memory.sqlite_memory_store import SQLiteMemoryStore
+from src.utils.recipient import compute_recipient_key, normalize_recipient
 
 
 SYSTEM_PROMPT = """
@@ -40,8 +42,9 @@ Rules:
 class PersonalizationAgent(BaseAgent):
     """Loads user profile from SQLite and applies safe minimal personalization."""
 
-    def __init__(self, llm, logger, profile_store: SQLiteProfileStore):
+    def __init__(self, llm, logger, profile_store: SQLiteProfileStore, memory_store: SQLiteMemoryStore):
         self.profile_store = profile_store
+        self.memory_store = memory_store
 
         super().__init__(
             name="Personalization",
@@ -81,15 +84,32 @@ class PersonalizationAgent(BaseAgent):
             f"[Personalization] Input: draft_len={len(draft)} parsed_keys={list(parsed_input.keys())[:10]}"
         )
 
+        past_summary = None
+        recipient_key = "unknown"
+        recipient = parsed_input.get("recipient") or {}
+        self.logger.debug(f"[Personalization] Parsed recipient: {recipient!r}")
+        if recipient:
+            metadata = state.get("constraints") or {}
+            recipient = normalize_recipient(recipient, metadata)
+            self.logger.debug(f"[Personalization] Normalized recipient: {recipient!r}")
+            recipient_key = compute_recipient_key(recipient)
+            self.logger.debug(f"[Personalization] Computed recipient_key: {recipient_key!r}")
+            past_summary = self.memory_store.get_past_summary(
+                user_id, recipient_key
+            )
+            self.logger.debug(f"[Personalization] Loaded past summary for user={user_id}, recipient_key={recipient_key}\n keys={list(past_summary.keys())[:10]}" if past_summary else "None")
+            payload["past_summary"] = past_summary
+
+        self.logger.debug(f"[Personalization] Invoking LLM with payload={payload!r}")
         response = await self.agent.ainvoke(
             {
                 "messages": state.get("messages", []),
-                "state_json": self._safe_state_json(payload),
+                "state_json": payload,
             }
         )
 
         self.logger.debug(
-            f"[Personalization] Raw model output (first 200 chars): {response.content[:200]!r}"
+            f"[Personalization] Raw model output: {response.content!r}"
         )
 
         # 2) Parse strict JSON

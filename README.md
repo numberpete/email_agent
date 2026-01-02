@@ -2,7 +2,7 @@
 
 ![MIT License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)
-![LangGraph](https://img.shields.io/badge/LangGraph-0.2%2B-orange.svg)
+![LangGraph](https://img.shields.io/badge/LangGraph-1.0.5%2B-orange.svg)
 ![LiteLLM](https://img.shields.io/badge/LiteLLM-1.0%2B-purple.svg)
 ![SQLite](https://img.shields.io/badge/SQLite-3-003B57.svg?logo=sqlite&logoColor=white)
 

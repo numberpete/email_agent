@@ -183,8 +183,11 @@ echo -e "${GREEN}  Open your browser to the URL below${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 
+# Set PYTHONPATH to project root so imports work correctly
+export PYTHONPATH="$SCRIPT_DIR:$PYTHONPATH"
+
 # Start Streamlit
-exec streamlit run ui/app.py \
+exec streamlit run src/ui/app.py \
     --server.headless=true \
     --browser.gatherUsageStats=false \
     --theme.primaryColor="#8B4557" \

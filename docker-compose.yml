@@ -1,0 +1,49 @@
+# EMaiL Assist - Docker Compose Configuration
+# 
+# Usage (Docker Compose V2 - recommended):
+#   docker compose up --build
+#   docker compose down
+#
+# Usage (Legacy - if you have docker-compose installed):
+#   docker-compose up --build
+#   docker-compose down
+
+services:
+  email-assist:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: email-assist
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    environment:
+      # Required API keys - set these in .env file or pass directly
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      # SECRET_SALT will be auto-generated if not provided
+      - SECRET_SALT=${SECRET_SALT:-}
+      # Streamlit configuration
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+    volumes:
+      # Persist SQLite database
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - email-assist-network
+
+networks:
+  email-assist-network:
+    driver: bridge
+
+# Optional: Add volume for persistent data
+volumes:
+  email-assist-data:
+    driver: local

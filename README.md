@@ -22,7 +22,7 @@ This was done as a capstone project for the Interview Kickstart Agentic AI cours
 - ANTHROPIC_API_KEY (optional fallback)
 - SECRET_SALT
 
-### Run locally
+### Run locally (mac only)
 ```bash
 ./start.sh
 ```

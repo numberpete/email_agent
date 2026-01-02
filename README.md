@@ -37,6 +37,8 @@ docker compose up --build
 pytest -v
 ```
 
+For the UI, you can also add ?debug=1 which will enable the Streamlit header functionality and enable a expander (Agent Trace (Debug)) at the bottom of the app.
+
 ## Architecture
 
 ### System Architecture

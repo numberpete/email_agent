@@ -583,16 +583,18 @@ with left:
     
     # Display suggested fix for FAIL or BLOCKED
     if status == "FAIL":
-        suggested_fix = vr.get("suggested_fix", "")
-        if suggested_fix:
-            st.markdown(f"""
-            <div class="warning-message">
-                <strong>⚠️ Suggested Fix:</strong><br>{suggested_fix}
-            </div>
-            """, unsafe_allow_html=True)
+        issues = vr.get("issues", [])
+        if issues:
+            suggested_fix = issues[-1].get("suggested_fix", "")
+            if suggested_fix:
+                st.markdown(f"""
+                <div class="warning-message">
+                    <strong>⚠️ Suggested Fix:</strong><br>{suggested_fix}
+                </div>
+                """, unsafe_allow_html=True)
     
     if status == "BLOCKED":
-        suggested_fix = vr.get("suggested_fix", "")
+        suggested_fix = vr.get("summary", "")
         if suggested_fix:
             st.markdown(f"""
             <div class="error-message">
@@ -661,7 +663,7 @@ with left:
             onmouseover="this.style.borderColor='#8B4557'; this.style.color='#8B4557';"
             onmouseout="if(this.innerText !== '✓ Copied!') {{ this.style.borderColor='rgba(49, 57, 66, 0.2)'; this.style.color='rgb(49, 51, 63)'; }}"
             onclick="
-                const content = `{escaped_content}`;
+                const content = '{escaped_content}';
                 navigator.clipboard.writeText(content).then(() => {{
                     this.innerText = '✓ Copied!';
                     this.style.background = '#C6F6D5';

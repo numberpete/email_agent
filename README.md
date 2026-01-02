@@ -1,4 +1,4 @@
-# EMaiL Assist
+# EMaiL Assist: AI-Powered Email Assistant
 
 ![MIT License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)
@@ -188,6 +188,15 @@ session_id is computed as a hash of the user_id + salt (SECRET_SALT env var).
 | **PersonalizationAgent** | Injects user profile data and recipient context |
 | **ReviewValidatorAgent** | Validates draft quality, returns PASS/FAIL/BLOCKED |
 | **MemoryAgent** | Persists interaction context for future reference |
+
+### LLM Routing
+LiteLLM is used for routing.  Routing is done vias the SDK in utils/router.py.
+There are two routes:
+
+- deterministic: low temperature (0.2) used for most Agents
+- creative: high temperature (0.7) used by the DraftWriterAgent
+
+Each has a primary LLM (gpt-4o-mini) and a fallback (laude-3-5-haiku-20241022).  I went with haiku as the fallback as I found it interpreted the prompts more similarly to gpt-4o-mini than did more powerful Claude models or Gemini models.
 
 ### Directory Structure
 ```

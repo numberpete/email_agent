@@ -2,6 +2,9 @@
 
 ![MIT License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)
+![LangGraph](https://img.shields.io/badge/LangGraph-0.2%2B-orange.svg)
+![LiteLLM](https://img.shields.io/badge/LiteLLM-1.0%2B-purple.svg)
+![SQLite](https://img.shields.io/badge/SQLite-3-003B57.svg?logo=sqlite&logoColor=white)
 
 Email Assist is a multi-agent, LangGraph-powered AI email assistant that parses intent,
 applies tone, drafts emails using templates, validates output, and maintains lightweight
@@ -13,6 +16,8 @@ This was done as a capstone project for the Interview Kickstart Agentic AI cours
 
 ### Requirements
 - Python 3.12+
+
+#### Environment vars (in .env)
 - OPENAI_API_KEY
 - ANTHROPIC_API_KEY (optional fallback)
 - SECRET_SALT

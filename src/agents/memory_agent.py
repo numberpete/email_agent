@@ -82,10 +82,11 @@ class MemoryAgent(BaseAgent):
             self.logger.debug(f"[Memory] Computed recipient_key: {recipient_key!r}")
 
 
-            # Load existing summary
-            past_summary = self.memory_store.get_past_summary(
-                user_id, recipient_key
-            )
+            if recipient_key:
+                # Load existing summary
+                past_summary = self.memory_store.get_past_summary(
+                    user_id, recipient_key
+                )
 
         payload = {
             "existing_summary": past_summary,
@@ -116,11 +117,12 @@ class MemoryAgent(BaseAgent):
             )
             return [AIMessage(content="Memory update skipped due to parse error.")], {}
 
-        self.memory_store.upsert_summary(
-            user_id=user_id,
-            recipient_key=recipient_key,
-            summary=summary,
-        )
+        if recipient_key:
+            self.memory_store.upsert_summary(
+                user_id=user_id,
+                recipient_key=recipient_key,
+                summary=summary,
+            )
 
         self.logger.debug("[Memory] Summary upserted successfully")
 

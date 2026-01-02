@@ -76,7 +76,13 @@ Rules:
 - For checklist failures, you MUST include at least one "coherence" or "constraints" issue whose detail includes:
   - the failed checklist letter(s) (e.g., "A,E")
   - 1 short quoted snippet (<=20 words) from the draft showing the problem OR stating "missing" if absent
-
+- Important: Do NOT FAIL a draft solely because it lacks facts that the email is explicitly requesting.
+  Example: If the user asks “ask when the interview is scheduled”, the email should request the date/time;
+  it is NOT required to already contain the date/time.
+- For scheduling inquiries, PASS if the email clearly asks for the interview date/time (or next steps),
+  even if no dates are provided.
+- Only FAIL for “specificity” when the question itself is unclear (e.g., it is ambiguous what meeting/interview,
+  which role, or which timeframe), not when the requested information is simply unknown.
 - If constraints require abusive/profane/harassing content or other disallowed content,
   status MUST be "BLOCKED".
 - If status is FAIL, revision_instructions MUST be non-empty and actionable (1-3 sentences).

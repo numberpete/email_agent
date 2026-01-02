@@ -53,8 +53,9 @@ def compute_recipient_key(recipient: Dict[str, Any]) -> str:
     name = (recipient.get("name") or "").strip().lower()
     org = (recipient.get("org") or "").strip().lower()
     role = (recipient.get("role") or "").strip().lower()
+    if (name and org) or (name and role):
+        base = "|".join([name, org, role])
+        digest = hashlib.sha256(base.encode("utf-8")).hexdigest()[:16]
+        return f"hash:{digest}"
 
-    base = "|".join([name, org, role])
-    digest = hashlib.sha256(base.encode("utf-8")).hexdigest()[:16]
-    return f"hash:{digest}"
-
+    return None

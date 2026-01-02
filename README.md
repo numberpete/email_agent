@@ -201,7 +201,7 @@ email_assist/
 ├── .gitattributes
 ├── start.sh
 ├── data/
-│   └── email_assist.db          # SQLite DB (created at runtime)
+│   └── email_assist.db          # SQLite DB
 ├── src/
 │   ├── ui/
 │   │   └── app.py                # Streamlit UI

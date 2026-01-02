@@ -1,0 +1,64 @@
+[project]
+name = "email-assist"
+version = "0.1.0"
+description = "AI-powered email assistant using LangGraph + Streamlit"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+
+# Optional: if you want to start moving toward packaging later, you can add:
+# dependencies = [
+#   "streamlit",
+#   "langgraph",
+#   "langchain",
+#   "langchain-openai",
+#   "litellm",
+#   "aiosqlite",
+# ]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+addopts = "-q"
+asyncio_mode = "auto"
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+filterwarnings = [
+  "ignore:.*distutils.*:DeprecationWarning",
+]
+
+# If you use pytest markers, define them here to avoid warnings.
+markers = [
+  "asyncio: marks tests as asyncio",
+  "integration: marks slow or external-dependency tests",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+extend-exclude = ["data", ".venv", "dist", "build"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = [
+  "E501", # let line-length be handled by formatter preference / pragmatism
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests often legitimately use asserts, fixtures, and stubs.
+"tests/**" = ["B011"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+# Optional (only if you start running mypy):
+# [tool.mypy]
+# python_version = "3.12"
+# warn_return_any = true
+# warn_unused_configs = true
+# disallow_untyped_defs = false
+# ignore_missing_imports = true
